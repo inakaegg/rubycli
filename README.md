@@ -255,6 +255,12 @@ Rubycli parses a hybrid format – you can stick to familiar YARD tags or use sh
 | Keyword option | Same as above | `--flag -f FLAG [Type] Description` |
 | Return value | `@return [Type] Description` | `=> [Type] Description` |
 
+Short options are optional and order-independent, so the following examples are equivalent:
+
+- `--flag -f FLAG [Type] Description`
+- `--flag FLAG [Type] Description`
+- `-f --flag FLAG [Type] Description`
+
 Types accept `String`, `Integer`, `String[]`, `Array<String>`, union `String | nil`, etc. Optional placeholders like `[VALUE]` or `[VALUE...]` let Rubycli infer boolean flags, optional values, and list coercion. When you omit the type on an uppercase placeholder (for example `--quiet`), Rubycli infers a Boolean flag automatically.
 
 Common inference rules:

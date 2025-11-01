@@ -253,6 +253,12 @@ rubycli scripts/multi_runner.rb Admin::Runner list --active
 | キーワード引数 | 同上 | `--flag -f FLAG [Type] 説明` |
 | 戻り値 | `@return [Type] 説明` | `=> [Type] 説明` |
 
+短いオプション（`-f` など）は任意で、登場順も自由です。次の例はいずれも同じ意味になります。
+
+- `--flag -f FLAG [Type] 説明`
+- `--flag FLAG [Type] 説明`
+- `-f --flag FLAG [Type] 説明`
+
 型は `String` や `Integer` のほか、`String[]` や `Array<String>`, `String | nil` なども利用できます。`[VALUE]` や `[VALUE...]` といったプレースホルダ表現で、真偽値や可変長引数を推論させられます。型名を省略した大文字プレースホルダ（例: `--quiet`）は自動的に Boolean フラグとして扱われます。
 
 代表的な推論例:
