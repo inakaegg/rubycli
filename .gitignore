@@ -1,0 +1,3 @@
+tmp/
+.ruby-lsp/
+*.gem
