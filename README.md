@@ -4,6 +4,8 @@ Rubycli turns existing Ruby classes and modules into CLIs by reading their docum
 
 > 🇯🇵 Japanese documentation is available in [README.ja.md](README.ja.md).
 
+![Rubycli demo showing generated commands and invocation](assets/rubycli-demo.gif)
+
 ### 1. Existing Ruby script (Rubycli unaware)
 
 ```ruby
@@ -143,7 +145,12 @@ end
 
 ### 3. (Optional) Embed the runner inside your script
 
-Prefer to launch via `ruby hello_app.rb ...`? Require the gem and delegate to `Rubycli.run` (see Quick start below).
+Prefer to launch via `ruby ...` directly? Require the gem and delegate to `Rubycli.run` (see Quick start below for `examples/hello_app_with_require.rb`).
+
+```bash
+ruby examples/hello_app_with_require.rb greet Hanako --shout
+#=> HELLO, HANAKO!
+```
 
 ## Project Philosophy
 
@@ -196,10 +203,10 @@ gem "rubycli", path: "path/to/rubycli"
 
 ## Quick start (embed Rubycli in the script)
 
-Step 3 adds `require "rubycli"` so the script can invoke the CLI directly:
+Step 3 adds `require "rubycli"` so the script can invoke the CLI directly (see `examples/hello_app_with_require.rb`):
 
 ```ruby
-# hello_app.rb
+# hello_app_with_require.rb
 require "rubycli"
 
 module HelloApp
@@ -222,10 +229,10 @@ Rubycli.run(HelloApp)
 Run it:
 
 ```bash
-ruby hello_app.rb greet Taro
+ruby examples/hello_app_with_require.rb greet Taro
 #=> Hello, Taro!
 
-ruby hello_app.rb greet Taro --shout
+ruby examples/hello_app_with_require.rb greet Taro --shout
 #=> HELLO, TARO!
 ```
 
