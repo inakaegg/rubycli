@@ -13,11 +13,12 @@ module Rubycli
       Options:
         --new, -n            Instantiate the class/module before invoking CLI commands
         --pre-script SRC     Evaluate Ruby code and use its result as the exposed target (--init alias)
-        --json-args          Treat all following arguments as JSON
+        --json-args          Parse all following arguments strictly as JSON (no YAML literals)
         --eval-args          Evaluate following arguments as Ruby code
         (Note: --json-args and --eval-args are mutually exclusive)
 
       When CLASS_OR_MODULE is omitted, Rubycli infers it from the file name in CamelCase.
+      Arguments are parsed as safe literals by default; pick a mode above if you need strict JSON or Ruby eval.
       Method return values are printed to STDOUT by default.
       CLI_ARGS are forwarded to Rubycli unchanged.
     USAGE

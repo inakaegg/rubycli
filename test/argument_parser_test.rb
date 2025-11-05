@@ -53,4 +53,21 @@ class ArgumentParserTest < Minitest::Test
     assert_equal ['runner'], pos_args
     assert_equal({ limit: 5 }, kw_args)
   end
+
+  def test_positional_literal_array_is_parsed_by_default
+    pos_args, kw_args = @parser.parse(['["Alice","Bob"]'])
+
+    assert_equal [%w[Alice Bob]], pos_args
+    assert_equal({}, kw_args)
+  end
+
+  def test_positional_literal_hash_is_parsed_by_default
+    method = DocExamples::TaggedSamples.new.method(:process)
+    args = ['{"feature":true}', '--verbose']
+
+    pos_args, kw_args = @parser.parse(args, method)
+
+    assert_equal([{ 'feature' => true }], pos_args)
+    assert_equal({ verbose: true }, kw_args)
+  end
 end

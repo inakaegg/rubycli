@@ -163,7 +163,7 @@ ruby examples/hello_app_with_require.rb greet Hanako --shout
 
 - Comment-aware CLI generation with both YARD-style tags and concise placeholders
 - Automatic option signature inference (`NAME [Type] Description…`) without extra DSLs
-- Optional JSON coercion for arguments passed via `--json-args`
+- Safe literal parsing out of the box (arrays / hashes / booleans) with opt-in strict JSON and Ruby eval modes
 - Optional pre-script hook (`--pre-script` / `--init`) to evaluate Ruby and expose the resulting object
 - Opt-in strict mode (`RUBYCLI_STRICT=ON`) that emits warnings whenever comments contradict method signatures
 
@@ -340,15 +340,21 @@ Here only `AMOUNT` is documented, yet `factor`, `clamp`, and `notify` are still 
 
 In short, comments never add live parameters by themselves; they enrich or describe what your method already supports.
 
-## JSON mode
+## Argument parsing modes
 
-Supply `--json-args` when invoking the runner and Rubycli will parse subsequent arguments as JSON before passing them to your method:
+### Default literal parsing
+
+Rubycli tries to interpret every argument as a safe Ruby literal using `Psych.safe_load` before handing it to your code. That means values such as `--names='["Alice","Bob"]'` or `--config='{foo: 1}'` arrive as native arrays / hashes without any extra flags. Unsupported constructs fall back to plain strings, so `"2024-01-01"` stays a string (Date is not auto-instantiated) and malformed payloads still reach your method instead of killing the run.
+
+### JSON mode
+
+Supply `--json-args` when invoking the runner and Rubycli will parse subsequent arguments strictly as JSON before passing them to your method:
 
 ```bash
 rubycli --json-args my_cli.rb MyCLI run '["--config", "{\"foo\":1}"]'
 ```
 
-Programmatically you can call `Rubycli.with_json_mode(true) { … }`.
+This mode rejects YAML-only syntax and raises `JSON::ParserError` when the payload is invalid, which is handy for callers who want explicit failures instead of silent fallbacks. Programmatically you can call `Rubycli.with_json_mode(true) { … }`.
 
 ## Eval mode
 
@@ -360,7 +366,7 @@ rubycli --eval-args scripts/data_cli.rb DataCLI run '(1..10).to_a'
 
 Under the hood Rubycli evaluates each argument inside an isolated binding (`Object.new.instance_eval { binding }`). Treat this as unsafe input: do not enable it for untrusted callers. The mode can also be toggled programmatically via `Rubycli.with_eval_mode(true) { … }`.
 
-`--eval-args` and `--json-args` are mutually exclusive; Rubycli will raise an error if both are present.
+`--eval-args` and `--json-args` are mutually exclusive; Rubycli will raise an error if both are present. Both modes augment the default literal parsing, so you can pick either strict JSON or full Ruby evaluation when the defaults are not enough.
 
 ## Pre-script bootstrap
 

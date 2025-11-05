@@ -156,7 +156,7 @@ end
 
 - コメントベースで CLI オプションやヘルプを自動生成
 - YARD 形式と `NAME [Type] 説明…` の簡潔記法を同時サポート
-- `--json-args` で渡された引数を自動的に JSON パース
+- 引数はデフォルトで安全なリテラルとして解釈し、必要に応じて厳格 JSON モードや Ruby eval モードを切り替え可能
 - `--pre-script`（エイリアス: `--init`）で任意の Ruby コードを評価し、その結果オブジェクトを公開
 - `RUBYCLI_STRICT=ON` で有効化できる厳格モードにより、コメントとシグネチャの矛盾を警告として検知可能
 
@@ -338,27 +338,27 @@ Options:
 - `@param` の行に続く箇条書きや補足行は CLI の自動生成には使われません。補足情報を表示したい場合は、`--flag ...` 行の説明に含めるか、README など別のドキュメントで扱ってください。
 - `RUBYCLI_ALLOW_PARAM_COMMENT=OFF` にすると `@param`/`@return` などのタグは警告扱いになります。プロジェクト内で簡潔記法へ統一するときはこの環境変数で段階的に移行できます。
 
-## JSON モード
+## 引数解析モード
 
-CLI 実行時に `--json-args` を付けると、後続の引数が JSON として解釈され Ruby オブジェクトに変換されます。
+### 既定のリテラル解析
+
+Rubycli はすべての引数をまず `Psych.safe_load` で「安全なリテラル」として解釈し、成功すれば Ruby の配列／ハッシュ／真偽値に変換してからメソッドへ渡します。たとえば `--names='["Alice","Bob"]'` や `--config='{foo: 1}'` のような値は追加フラグ無しでネイティブな配列・ハッシュとして届きます。扱えない形式は自動的に文字列へフォールバックするため、`"2024-01-01"` のような値もそのまま文字列で受け取れますし、構文が崩れていても CLI 全体が落ちることはありません。
+
+### JSON モード
+
+CLI 実行時に `--json-args` を付けると、後続の引数が厳格に JSON として解釈されます。
 
 ```bash
 rubycli --json-args my_cli.rb MyCLI run '["--config", "{\"foo\":1}"]'
 ```
 
-プログラム側では `Rubycli.with_json_mode(true) { … }` で同じ効果を得られます。
+YAML 固有の書き方は拒否され、無効な JSON であれば `JSON::ParserError` が発生するため、入力の妥当性を強く保証したいときに便利です。プログラム側では `Rubycli.with_json_mode(true) { … }` で有効化できます。
 
-## Eval モード
+### Eval モード
 
-`--eval-args` を使うと、後続の引数を Ruby コードとして評価した結果を CLI に渡せます。JSON では表現しづらいオブジェクトを扱いたいときに便利です。
+`--eval-args` を使うと、後続の引数を Ruby コードとして評価した結果を CLI に渡せます。JSON や YAML では表現しづらいオブジェクトを扱いたいときに便利ですが、評価は `Object.new.instance_eval { binding }` 上で行われるため、信頼できる入力に限定してください。コード内では `Rubycli.with_eval_mode(true) { … }` で切り替えられます。
 
-```bash
-rubycli --eval-args scripts/data_cli.rb DataCLI run '(1..10).to_a'
-```
-
-評価は `Object.new.instance_eval { binding }` に対して行われるため、信頼できる環境でのみ利用してください。プログラム側からは `Rubycli.with_eval_mode(true) { … }` で有効化できます。
-
-`--eval-args` と `--json-args` は同時指定できません。両方付けた場合はエラーになります。
+`--eval-args` と `--json-args` は同時指定できません。どちらのモードも既定のリテラル解析を拡張する位置づけなので、用途に応じて厳格な JSON か Ruby eval のどちらかを選択してください。
 
 ## Pre-script ブートストラップ
 

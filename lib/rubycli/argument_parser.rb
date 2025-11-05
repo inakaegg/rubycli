@@ -1,3 +1,4 @@
+require 'psych'
 require_relative 'type_utils'
 
 module Rubycli
@@ -203,6 +204,9 @@ module Rubycli
     end
 
     def convert_arg(arg)
+      literal = try_literal_parse(arg)
+      return literal unless literal.equal?(LITERAL_PARSE_FAILURE)
+
       return nil if arg.nil? || arg.casecmp('nil').zero?
       return true if arg.casecmp('true').zero?
       return false if arg.casecmp('false').zero?
@@ -218,6 +222,19 @@ module Rubycli
 
     def float_string?(str)
       str =~ /\A-?\d+\.\d+\z/
+    end
+
+    LITERAL_PARSE_FAILURE = Object.new
+
+    def try_literal_parse(value)
+      return LITERAL_PARSE_FAILURE unless value.is_a?(String)
+
+      trimmed = value.strip
+      return value if trimmed.empty?
+
+      Psych.safe_load(trimmed, aliases: false)
+    rescue Psych::SyntaxError, Psych::DisallowedClass, Psych::Exception
+      LITERAL_PARSE_FAILURE
     end
 
 

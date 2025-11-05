@@ -11,6 +11,7 @@ class CommandLineTest < Minitest::Test
 
     assert_equal 1, status
     assert_includes out, 'Usage: rubycli'
+    assert_includes out, 'Arguments are parsed as safe literals by default'
     assert_equal '', err
   end
 
