@@ -3,7 +3,7 @@
 module Rubycli
   module CommandLine
     USAGE = <<~USAGE
-      Usage: rubycli [--new|-n] [--pre-script SRC] [--json-args | --eval-args] TARGET_PATH [CLASS_OR_MODULE] [-- CLI_ARGS...]
+      Usage: rubycli [--new|-n] [--pre-script=<src>] [--json-args | --eval-args] <target-path> [<class-or-module>] [-- <cli-args>...]
 
       Examples:
         rubycli scripts/sample_runner.rb echo --message hello
@@ -12,15 +12,16 @@ module Rubycli
 
       Options:
         --new, -n            Instantiate the class/module before invoking CLI commands
-        --pre-script SRC     Evaluate Ruby code and use its result as the exposed target (--init alias)
+        --pre-script=<src>   Evaluate Ruby code and use its result as the exposed target (--init alias; also accepts space-separated form)
         --json-args          Parse all following arguments strictly as JSON (no YAML literals)
         --eval-args          Evaluate following arguments as Ruby code
         (Note: --json-args and --eval-args are mutually exclusive)
+        (Note: Every option that accepts a value understands both --flag=value and --flag value forms.)
 
-      When CLASS_OR_MODULE is omitted, Rubycli infers it from the file name in CamelCase.
+      When <class-or-module> is omitted, Rubycli infers it from the file name in CamelCase.
       Arguments are parsed as safe literals by default; pick a mode above if you need strict JSON or Ruby eval.
       Method return values are printed to STDOUT by default.
-      CLI_ARGS are forwarded to Rubycli unchanged.
+      <cli-args> are forwarded to Rubycli unchanged.
     USAGE
 
     module_function

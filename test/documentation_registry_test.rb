@@ -109,7 +109,7 @@ class DocumentationRegistryTest < Minitest::Test
     metadata = @registry.metadata_for(method)
 
     labels = metadata[:positionals].map(&:label)
-    assert_equal ['SUBJECT', 'COUNT'], labels
+    assert_equal ['<subject>', '<count>'], labels
 
     count_doc = metadata[:positionals].last
     assert count_doc.inline_type_annotation

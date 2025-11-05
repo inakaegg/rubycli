@@ -177,21 +177,17 @@ end
 
 ## インストール
 
-まだ RubyGems で公開していません。リポジトリをクローンしてローカルパスを Bundler に指定するか、`.gemspec` 追加後に `gem build` で `.gem` を作成してインストールしてください。
+Rubycli は RubyGems からインストールできます。
 
 ```bash
-git clone https://github.com/inakaegg/rubycli.git
-cd rubycli
-# gem build rubycli.gemspec
-gem build rubycli.gemspec
-gem install rubycli-<version>.gem
+gem install rubycli
 ```
 
 Bundler 例:
 
 ```ruby
 # Gemfile
-gem "rubycli", path: "path/to/rubycli"
+gem "rubycli"
 ```
 
 ## クイックスタート（Rubycli をスクリプトに組み込む）
@@ -247,24 +243,32 @@ rubycli scripts/multi_runner.rb Admin::Runner list --active
 
 ## コメント記法
 
-| 用途 | YARD 互換 | 簡潔記法 |
-| ---- | --------- | -------- |
-| 位置引数 | `@param name [Type] 説明` | `NAME [Type] 説明`（NAME は大文字） |
-| キーワード引数 | 同上 | `--flag -f FLAG [Type] 説明` |
+| 用途 | YARD 互換 | Rubycli 標準 |
+| ---- | --------- | ----------- |
+| 位置引数 | `@param name [Type] 説明` | `NAME [Type] 説明` |
+| キーワード引数 | 同上 | `--flag -f VALUE [Type] 説明` |
 | 戻り値 | `@return [Type] 説明` | `=> [Type] 説明` |
 
-短いオプション（`-f` など）は任意で、登場順も自由です。次の例はいずれも同じ意味になります。
+短いオプション（`-f` など）は任意で、登場順も自由です。Rubycli 標準の書き方では次の例が同義になります。
 
-- `--flag -f FLAG [Type] 説明`
-- `--flag FLAG [Type] 説明`
-- `-f --flag FLAG [Type] 説明`
+- `--flag -f VALUE [Type] 説明`
+- `--flag VALUE [Type] 説明`
+- `-f --flag VALUE [Type] 説明`
 
-型は `String` や `Integer` のほか、`String[]` や `Array<String>`, `String | nil` なども利用できます。`[VALUE]` や `[VALUE...]` といったプレースホルダ表現で、真偽値や可変長引数を推論させられます。型名を省略した大文字プレースホルダ（例: `--quiet`）は自動的に Boolean フラグとして扱われます。
+### 互換プレースホルダ表記
+
+コメントやヘルプ出力では次の表記も同じ意味として解釈されます。
+
+- 山括弧で値を明示: `--flag <value>`, `NAME [<value>]`
+- ロングオプションの `=` 付き表記: `--flag=<value>`
+- 繰り返し指定: `VALUE...`, `<value>...`
+
+実行時には `--flag VALUE`, `--flag <value>`, `--flag=<value>` のどれで入力しても同じ扱いです。プロジェクトで読みやすいスタイルを選択してください。`[VALUE]` や `[VALUE...]` のような表記を使うと、真偽値・任意値・リストなどの推論が働きます。値プレースホルダを省略したオプション（例: `--quiet`）は自動で Boolean フラグとして扱われます。
 
 代表的な推論例:
 
-- `ARG1` のように型ラベルを省略した大文字プレースホルダは既定で `String` として扱われます。
-- `--name ARG1` のようにオプションへ大文字プレースホルダだけを指定しても同じく `String` が推論されます。
+- `ARG1` のように型ラベルを省略したプレースホルダは既定で `String` として扱われます。
+- `--name ARG1` のようにオプションへプレースホルダだけを指定しても同じく `String` が推論されます。
 - `--verbose` のように値プレースホルダを省略したオプションは Boolean フラグとして扱われます。
 
 `@example` や `@raise`, `@see`, `@deprecated` などその他の YARD タグは、現状ヘルプ出力には反映されません。
@@ -299,7 +303,7 @@ Usage: fallback_example.rb COMMAND [arguments]
 
 Available commands:
   Class methods:
-    scale                <amount> [<factor>] [--clamp=<value>] [--notify=<value>]
+    scale                <amount> [<factor>] [--clamp=<CLAMP>] [--notify]
 
 Detailed command help: fallback_example.rb COMMAND help
 Enable debug logging: --debug or RUBYCLI_DEBUG=true
@@ -310,14 +314,14 @@ rubycli examples/fallback_example.rb scale --help
 ```
 
 ```text
-Usage: fallback_example.rb scale <AMOUNT> [<FACTOR>] [--clamp=<value>] [--notify]
+Usage: fallback_example.rb scale <AMOUNT> [<FACTOR>] [--clamp=<CLAMP>] [--notify]
 
 Positional arguments:
   AMOUNT    [Integer] 処理対象の数値
   [FACTOR]  (default: 2)
 
 Options:
-  --clamp CLAMP  (type: String) (default: nil)
+  --clamp=<CLAMP>  (type: String) (default: nil)
   --notify       (type: Boolean) (default: false)
 ```
 

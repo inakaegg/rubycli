@@ -184,21 +184,17 @@ ruby examples/hello_app_with_require.rb greet Hanako --shout
 
 ## Installation
 
-The library is not published on RubyGems yet. Clone the repository and point Bundler to the local path, or build a `.gem` once the `.gemspec` is added.
+Rubycli is published on RubyGems.
 
 ```bash
-git clone https://github.com/inakaegg/rubycli.git
-cd rubycli
-# gem build rubycli.gemspec
-gem build rubycli.gemspec
-gem install rubycli-<version>.gem
+gem install rubycli
 ```
 
 Bundler example:
 
 ```ruby
 # Gemfile
-gem "rubycli", path: "path/to/rubycli"
+gem "rubycli"
 ```
 
 ## Quick start (embed Rubycli in the script)
@@ -256,23 +252,31 @@ This is useful when a file defines multiple candidates or when you want a nested
 
 Rubycli parses a hybrid format – you can stick to familiar YARD tags or use short forms.
 
-| Purpose | YARD-compatible | Concise form |
-| ------- | --------------- | ------------ |
-| Positional argument | `@param name [Type] Description` | `NAME [Type] Description` (`NAME` must be uppercase) |
-| Keyword option | Same as above | `--flag -f FLAG [Type] Description` |
+| Purpose | YARD-compatible | Rubycli style |
+| ------- | --------------- | ------------- |
+| Positional argument | `@param name [Type] Description` | `NAME [Type] Description` |
+| Keyword option | Same as above | `--flag -f VALUE [Type] Description` |
 | Return value | `@return [Type] Description` | `=> [Type] Description` |
 
-Short options are optional and order-independent, so the following examples are equivalent:
+Short options are optional and order-independent, so the following examples are equivalent in Rubycli’s default style:
 
-- `--flag -f FLAG [Type] Description`
-- `--flag FLAG [Type] Description`
-- `-f --flag FLAG [Type] Description`
+- `--flag -f VALUE [Type] Description`
+- `--flag VALUE [Type] Description`
+- `-f --flag VALUE [Type] Description`
 
-Types accept `String`, `Integer`, `String[]`, `Array<String>`, union `String | nil`, etc. Optional placeholders like `[VALUE]` or `[VALUE...]` let Rubycli infer boolean flags, optional values, and list coercion. When you omit the type on an uppercase placeholder (for example `--quiet`), Rubycli infers a Boolean flag automatically.
+### Alternate placeholder notations
+
+Rubycli also understands these syntaxes when parsing comments and rendering help:
+
+- Angle brackets for user input: `--flag <value>` or `NAME [<value>]`
+- Inline equals for long options: `--flag=<value>`
+- Trailing ellipsis for repeated values: `VALUE...` or `<value>...`
+
+The CLI treats `--flag VALUE`, `--flag <value>`, and `--flag=<value>` identically at runtime—document with whichever variant your team prefers. Optional placeholders like `[VALUE]` or `[VALUE...]` let Rubycli infer boolean flags, optional values, and list coercion. When you omit the placeholder entirely (for example `--quiet`), Rubycli infers a Boolean flag automatically.
 
 Common inference rules:
 
-- Writing a bare uppercase placeholder such as `ARG1` (without `[String]`) makes Rubycli treat it as a `String`.
+- Writing a placeholder such as `ARG1` (without `[String]`) makes Rubycli treat it as a `String`.
 - Using that placeholder in an option line (`--name ARG1`) also infers a `String`.
 - Omitting the placeholder entirely (`--verbose`) produces a Boolean flag.
 
@@ -308,7 +312,7 @@ Usage: fallback_example.rb COMMAND [arguments]
 
 Available commands:
   Class methods:
-    scale                <amount> [<factor>] [--clamp=<value>] [--notify=<value>]
+    scale                <amount> [<factor>] [--clamp=<CLAMP>] [--notify]
 
 Detailed command help: fallback_example.rb COMMAND help
 Enable debug logging: --debug or RUBYCLI_DEBUG=true
@@ -319,14 +323,14 @@ rubycli examples/fallback_example.rb scale --help
 ```
 
 ```text
-Usage: fallback_example.rb scale <AMOUNT> [<FACTOR>] [--clamp=<value>] [--notify]
+Usage: fallback_example.rb scale <AMOUNT> [<FACTOR>] [--clamp=<CLAMP>] [--notify]
 
 Positional arguments:
   AMOUNT    [Integer] Base amount to process
   [FACTOR]  (default: 2)
 
 Options:
-  --clamp CLAMP  (type: String) (default: nil)
+  --clamp=<CLAMP>  (type: String) (default: nil)
   --notify       (type: Boolean) (default: false)
 ```
 

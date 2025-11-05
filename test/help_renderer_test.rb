@@ -24,15 +24,15 @@ class HelpRendererTest < Minitest::Test
 
       Supports both positional and keyword documentation using YARD tags.
 
-      Usage: rubycli greet <NAME> [-g, --greeting GREETING] [-s, --shout] [--punctuation PUNCT]
+      Usage: rubycli greet <NAME> [-g, --greeting=<GREETING>] [-s, --shout] [--punctuation=<PUNCT>]
 
       Positional arguments:
         NAME  Person to greet (type: String)
 
       Options:
-        -g, --greeting GREETING  Greeting prefix (type: String) (default: 'Hello')
-        -s, --shout              Emit uppercase output (type: Boolean) (default: false)
-        --punctuation PUNCT      Optional punctuation suffix (type: String | nil) (default: nil)
+        -g, --greeting=<GREETING>  Greeting prefix (type: String) (default: 'Hello')
+        -s, --shout                Emit uppercase output (type: Boolean) (default: false)
+        --punctuation=<PUNCT>      Optional punctuation suffix (type: String | nil) (default: nil)
 
       Return values:
         String  Finalised greeting
@@ -56,7 +56,7 @@ class HelpRendererTest < Minitest::Test
 
       Options:
         --safe-mode  (type: Boolean) (default: true)
-        --tag TAG    (type: String) (default: nil)
+        --tag=<TAG>  (type: String) (default: nil)
     HELP
 
     assert_usage(expected, usage)

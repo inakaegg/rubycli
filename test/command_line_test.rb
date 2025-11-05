@@ -77,4 +77,25 @@ class CommandLineTest < Minitest::Test
       assert_includes err, '--json-args and --eval-args cannot be used at the same time'
     end
   end
+
+  def test_pre_script_allows_space_separated_value
+    argv = [
+      '--pre-script',
+      'instance.new',
+      'test/fixtures/doc_examples.rb'
+    ]
+
+    captured = nil
+    Rubycli::Runner.stub(:execute, ->(*args, **opts) { captured = { args: args, opts: opts } }) do
+      status = Rubycli::CommandLine.run(argv)
+      assert_equal 0, status
+    end
+
+    refute_nil captured
+    assert_equal 'test/fixtures/doc_examples.rb', captured[:args].first
+    assert_equal(
+      [{ value: 'instance.new', context: '(inline --pre-script)' }],
+      captured[:opts][:pre_scripts]
+    )
+  end
 end

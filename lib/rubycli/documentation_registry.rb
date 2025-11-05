@@ -201,9 +201,27 @@ module Rubycli
         normalized.each do |token|
           token_without_at = token.start_with?('@') ? token[1..] : token
           if token.start_with?('--')
-            long_option = token
+            if (eq_index = token.index('='))
+              long_option = token[0...eq_index]
+              inline_value = token[(eq_index + 1)..]
+              if value_name.nil? && inline_value && !inline_value.strip.empty?
+                value_name = inline_value.strip
+                next
+              end
+            else
+              long_option = token
+            end
           elsif token.start_with?('-')
-            short_option = token
+            if (eq_index = token.index('='))
+              short_option = token[0...eq_index]
+              inline_value = token[(eq_index + 1)..]
+              if value_name.nil? && inline_value && !inline_value.strip.empty?
+                value_name = inline_value.strip
+                next
+              end
+            else
+              short_option = token
+            end
           elsif value_name.nil? && placeholder_token?(token_without_at)
             value_name = token_without_at
           elsif type_token.nil? && type_token_candidate?(token)
@@ -275,16 +293,28 @@ module Rubycli
 
       long_option = nil
       short_option = nil
+      inline_value_from_long = nil
+      inline_value_from_short = nil
       remaining = []
 
       tokens.each do |token|
         if long_option.nil? && token.start_with?('--')
-          long_option = token
+          if (eq_index = token.index('='))
+            long_option = token[0...eq_index]
+            inline_value_from_long = token[(eq_index + 1)..]
+          else
+            long_option = token
+          end
           next
         end
 
         if short_option.nil? && token.start_with?('-') && !token.start_with?('--')
-          short_option = token
+          if (eq_index = token.index('='))
+            short_option = token[0...eq_index]
+            inline_value_from_short = token[(eq_index + 1)..]
+          else
+            short_option = token
+          end
           next
         end
 
@@ -294,7 +324,7 @@ module Rubycli
       return nil unless long_option
 
       type_token = nil
-      value_name = nil
+      value_name = [inline_value_from_long, inline_value_from_short].compact.map(&:strip).find { |val| !val.empty? }
       description_tokens = []
 
       remaining.each do |token|
@@ -340,7 +370,7 @@ module Rubycli
       return nil unless placeholder
 
       clean_placeholder = placeholder.delete('[]')
-      return nil unless clean_placeholder.match?(/\A[A-Z][A-Z0-9_]*\z/)
+      return nil unless placeholder_token?(clean_placeholder)
 
       type_token = nil
       if tokens.first && type_token_candidate?(tokens.first)
@@ -641,13 +671,29 @@ module Rubycli
       return false unless token
 
       candidate = token.strip.delete_prefix('@')
-      candidate = candidate.delete_prefix('[').delete_suffix(']')
-      candidate = candidate.gsub(/\.\.\./, '')
-      candidate = candidate.gsub(/[,\|]/, '')
-      candidate = candidate.gsub(/[^A-Za-z0-9_]/, '')
       return false if candidate.empty?
 
-      candidate == candidate.upcase && candidate.match?(/[A-Z]/)
+      optional = candidate.start_with?('[') && candidate.end_with?(']')
+      candidate = candidate[1..-2].strip if optional
+      return false if candidate.empty?
+
+      candidate = candidate.gsub(/[,\|]/, '')
+      return false if candidate.empty?
+
+      ellipsis = candidate.end_with?('...')
+      candidate = candidate[0..-4] if ellipsis
+      candidate = candidate.strip
+      return false if candidate.empty?
+
+      if candidate.start_with?('<') && candidate.end_with?('>')
+        inner = candidate[1..-2]
+        inner.match?(/\A[0-9A-Za-z][0-9A-Za-z._-]*\z/)
+      else
+        cleaned = candidate.gsub(/[^A-Za-z0-9_]/, '')
+        return false if cleaned.empty?
+
+        cleaned == cleaned.upcase && cleaned.match?(/[A-Z]/)
+      end
     end
 
     def type_token_candidate?(token)

@@ -28,10 +28,10 @@ module DocExamples
   class ConciseSamples
     # Create a descriptor for a subject.
     #
-    # SUBJECT [String] Subject to describe
-    # COUNT [Integer] Number of repetitions
-    # --style -s STYLE [String] Style flag
-    # --tags TAGS [Array<String>] Comma-separated tags
+    # <subject> [String] Subject to describe
+    # [<count>] [Integer] Number of repetitions
+    # --style -s <style> [String] Style flag
+    # --tags=<tags> [Array<String>] Comma-separated tags
     # => [String] Description text
     def describe(subject, count = 1, style: nil, tags: nil)
       base = ([subject] * count).join(' ')
@@ -41,9 +41,9 @@ module DocExamples
 
     # Toggle settings using boolean and optional value options.
     #
-    # TARGET [String] Target identifier
+    # <target> [String] Target identifier
     # --enable [Boolean] Switch on the feature
-    # --limit [LIMIT] Integer Optional limit (nil allowed)
+    # --limit [<limit>] Integer Optional limit (nil allowed)
     def toggle(target, enable: false, limit: nil)
       { target: target, enabled: enable, limit: limit }
     end

@@ -257,7 +257,13 @@ module Rubycli
       flag_label = flags.join(", ")
       placeholder = option_value_placeholder(opt)
       if placeholder
-        "#{flag_label} #{placeholder}"
+        formatted = ensure_angle_bracket_placeholder(placeholder)
+        if formatted.start_with?('[') && formatted.end_with?(']')
+          inner = formatted[1..-2]
+          "#{flag_label}[=#{inner}]"
+        else
+          "#{flag_label}=#{formatted}"
+        end
       else
         flag_label
       end
@@ -269,6 +275,27 @@ module Rubycli
 
       first_non_nil_type = opt.types&.find { |type| !nil_type?(type) && !boolean_type?(type) }
       first_non_nil_type
+    end
+
+    def ensure_angle_bracket_placeholder(placeholder)
+      raw = placeholder.to_s.strip
+      return raw if raw.empty?
+
+      optional = raw.start_with?('[') && raw.end_with?(']')
+      core = optional ? raw[1..-2].strip : raw
+      return raw if core.empty?
+
+      ellipsis = core.end_with?('...')
+      core = core[0..-4] if ellipsis
+
+      formatted_core = if core.start_with?('<') && core.end_with?('>')
+                         core
+                       else
+                         "<#{core}>"
+                       end
+
+      formatted_core = "#{formatted_core}..." if ellipsis
+      optional ? "[#{formatted_core}]" : formatted_core
     end
 
     def option_type_display(opt)
