@@ -1,5 +1,7 @@
 # Rubycli — Python Fire-inspired CLI for Ruby
 
+![Rubycli logo](assets/rubycli-logo.png)
+
 Rubycli turns existing Ruby classes and modules into CLIs by reading their documentation comments. It is inspired by [Python Fire](https://github.com/google/python-fire) but is not a drop-in port or an official project; the focus here is Ruby’s documentation conventions and type annotations.
 
 > 🇯🇵 Japanese documentation is available in [README.ja.md](README.ja.md).

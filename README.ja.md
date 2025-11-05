@@ -1,5 +1,7 @@
 # Rubycli — Python Fire 風の Ruby 向け CLI
 
+![Rubycli ロゴ](assets/rubycli-logo.png)
+
 Rubycli は Ruby のクラス／モジュールに書いたコメントから CLI を自動生成する小さなフレームワークです。Python Fire にインスパイアされていますが、互換や公式ポートを目指すものではありません。Ruby のコメント記法と型アノテーションに合わせて設計しています。
 
 > English guide is available in [README.md](README.md).
