@@ -3,7 +3,7 @@
 module Rubycli
   module CommandLine
     USAGE = <<~USAGE
-      Usage: rubycli [--new|-n] [--pre-script=<src>] [--json-args | --eval-args] <target-path> [<class-or-module>] [-- <cli-args>...]
+      Usage: rubycli [--new|-n] [--pre-script=<src>] [--json-args|-j | --eval-args|-e] <target-path> [<class-or-module>] [-- <cli-args>...]
 
       Examples:
         rubycli scripts/sample_runner.rb echo --message hello
@@ -13,8 +13,8 @@ module Rubycli
       Options:
         --new, -n            Instantiate the class/module before invoking CLI commands
         --pre-script=<src>   Evaluate Ruby code and use its result as the exposed target (--init alias; also accepts space-separated form)
-        --json-args          Parse all following arguments strictly as JSON (no YAML literals)
-        --eval-args          Evaluate following arguments as Ruby code
+        --json-args, -j      Parse all following arguments strictly as JSON (no YAML literals)
+        --eval-args, -e      Evaluate following arguments as Ruby code
         (Note: --json-args and --eval-args are mutually exclusive)
         (Note: Every option that accepts a value understands both --flag=value and --flag value forms.)
 
@@ -65,10 +65,10 @@ module Rubycli
           end
           context = File.file?(src) ? File.expand_path(src) : "(inline #{flag})"
           pre_script_sources << { value: src, context: context }
-        when '--json-args'
+        when '--json-args', '-j'
           json_mode = true
           args.shift
-        when '--eval-args'
+        when '--eval-args', '-e'
           eval_mode = true
           args.shift
         when '--print-result'

@@ -60,8 +60,8 @@ class CommandLineTest < Minitest::Test
 
   def test_json_and_eval_flags_conflict_is_reported
     argv = [
-      '--json-args',
-      '--eval-args',
+      '-j',
+      '-e',
       'test/fixtures/doc_examples.rb',
       'DocExamples::TaggedSamples'
     ]
@@ -76,6 +76,42 @@ class CommandLineTest < Minitest::Test
       assert_equal '', out
       assert_includes err, '--json-args and --eval-args cannot be used at the same time'
     end
+  end
+
+  def test_accepts_short_flag_for_json_mode
+    argv = [
+      '-j',
+      'test/fixtures/doc_examples.rb',
+      'DocExamples::TaggedSamples'
+    ]
+
+    captured = nil
+    Rubycli::Runner.stub(:execute, ->(*args, **opts) { captured = { args: args, opts: opts } }) do
+      status = Rubycli::CommandLine.run(argv)
+      assert_equal 0, status
+    end
+
+    refute_nil captured
+    assert_equal true, captured[:opts][:json]
+    assert_equal false, captured[:opts][:eval_args]
+  end
+
+  def test_accepts_short_flag_for_eval_mode
+    argv = [
+      '-e',
+      'test/fixtures/doc_examples.rb',
+      'DocExamples::TaggedSamples'
+    ]
+
+    captured = nil
+    Rubycli::Runner.stub(:execute, ->(*args, **opts) { captured = { args: args, opts: opts } }) do
+      status = Rubycli::CommandLine.run(argv)
+      assert_equal 0, status
+    end
+
+    refute_nil captured
+    assert_equal false, captured[:opts][:json]
+    assert_equal true, captured[:opts][:eval_args]
   end
 
   def test_pre_script_allows_space_separated_value

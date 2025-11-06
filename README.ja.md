@@ -362,19 +362,19 @@ Rubycli はすべての引数をまず `Psych.safe_load` で「安全なリテ�
 
 ### JSON モード
 
-CLI 実行時に `--json-args` を付けると、後続の引数が厳格に JSON として解釈されます。
+CLI 実行時に `--json-args`（短縮形 `-j`）を付けると、後続の引数が厳格に JSON として解釈されます。
 
 ```bash
-rubycli --json-args my_cli.rb MyCLI run '["--config", "{\"foo\":1}"]'
+rubycli -j my_cli.rb MyCLI run '["--config", "{\"foo\":1}"]'
 ```
 
 YAML 固有の書き方は拒否され、無効な JSON であれば `JSON::ParserError` が発生するため、入力の妥当性を強く保証したいときに便利です。プログラム側では `Rubycli.with_json_mode(true) { … }` で有効化できます。
 
 ### Eval モード
 
-`--eval-args` を使うと、後続の引数を Ruby コードとして評価した結果を CLI に渡せます。JSON や YAML では表現しづらいオブジェクトを扱いたいときに便利ですが、評価は `Object.new.instance_eval { binding }` 上で行われるため、信頼できる入力に限定してください。コード内では `Rubycli.with_eval_mode(true) { … }` で切り替えられます。
+`--eval-args`（短縮形 `-e`）を使うと、後続の引数を Ruby コードとして評価した結果を CLI に渡せます。JSON や YAML では表現しづらいオブジェクトを扱いたいときに便利ですが、評価は `Object.new.instance_eval { binding }` 上で行われるため、信頼できる入力に限定してください。コード内では `Rubycli.with_eval_mode(true) { … }` で切り替えられます。
 
-`--eval-args` と `--json-args` は同時指定できません。どちらのモードも既定のリテラル解析を拡張する位置づけなので、用途に応じて厳格な JSON か Ruby eval のどちらかを選択してください。
+`--eval-args`/`-e` と `--json-args`/`-j` は同時指定できません。どちらのモードも既定のリテラル解析を拡張する位置づけなので、用途に応じて厳格な JSON か Ruby eval のどちらかを選択してください。
 
 ## Pre-script ブートストラップ
 

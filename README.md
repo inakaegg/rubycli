@@ -364,25 +364,25 @@ Rubycli tries to interpret every argument as a safe Ruby literal using `Psych.sa
 
 ### JSON mode
 
-Supply `--json-args` when invoking the runner and Rubycli will parse subsequent arguments strictly as JSON before passing them to your method:
+Supply `--json-args` (or the shorthand `-j`) when invoking the runner and Rubycli will parse subsequent arguments strictly as JSON before passing them to your method:
 
 ```bash
-rubycli --json-args my_cli.rb MyCLI run '["--config", "{\"foo\":1}"]'
+rubycli -j my_cli.rb MyCLI run '["--config", "{\"foo\":1}"]'
 ```
 
 This mode rejects YAML-only syntax and raises `JSON::ParserError` when the payload is invalid, which is handy for callers who want explicit failures instead of silent fallbacks. Programmatically you can call `Rubycli.with_json_mode(true) { … }`.
 
 ## Eval mode
 
-Use `--eval-args` to evaluate Ruby expressions before they are forwarded to your CLI. This is handy when you want to pass rich objects that are awkward to express as JSON:
+Use `--eval-args` (or the shorthand `-e`) to evaluate Ruby expressions before they are forwarded to your CLI. This is handy when you want to pass rich objects that are awkward to express as JSON:
 
 ```bash
-rubycli --eval-args scripts/data_cli.rb DataCLI run '(1..10).to_a'
+rubycli -e scripts/data_cli.rb DataCLI run '(1..10).to_a'
 ```
 
 Under the hood Rubycli evaluates each argument inside an isolated binding (`Object.new.instance_eval { binding }`). Treat this as unsafe input: do not enable it for untrusted callers. The mode can also be toggled programmatically via `Rubycli.with_eval_mode(true) { … }`.
 
-`--eval-args` and `--json-args` are mutually exclusive; Rubycli will raise an error if both are present. Both modes augment the default literal parsing, so you can pick either strict JSON or full Ruby evaluation when the defaults are not enough.
+`--eval-args`/`-e` and `--json-args`/`-j` are mutually exclusive; Rubycli will raise an error if both are present. Both modes augment the default literal parsing, so you can pick either strict JSON or full Ruby evaluation when the defaults are not enough.
 
 ## Pre-script bootstrap
 
