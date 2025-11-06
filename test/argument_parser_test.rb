@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'test_helper'
+require_relative '../examples/documentation_style_showcase'
 
 class ArgumentParserTest < Minitest::Test
   def setup
@@ -54,6 +55,26 @@ class ArgumentParserTest < Minitest::Test
     assert_equal({ limit: 5 }, kw_args)
   end
 
+  def test_list_option_accepts_yaml_array_in_default_mode
+    method = DocumentationStyleShowcase.method(:canonical)
+    args = ['subject', '--tags', '[1,2]']
+
+    pos_args, kw_args = @parser.parse(args, method)
+
+    assert_equal ['subject'], pos_args
+    assert_equal({ tags: [1, 2] }, kw_args)
+  end
+
+  def test_list_option_accepts_comma_values_in_default_mode
+    method = DocumentationStyleShowcase.method(:canonical)
+    args = ['subject', '--tags', 'alpha,beta']
+
+    pos_args, kw_args = @parser.parse(args, method)
+
+    assert_equal ['subject'], pos_args
+    assert_equal({ tags: %w[alpha beta] }, kw_args)
+  end
+
   def test_positional_literal_array_is_parsed_by_default
     pos_args, kw_args = @parser.parse(['["Alice","Bob"]'])
 
@@ -69,5 +90,48 @@ class ArgumentParserTest < Minitest::Test
 
     assert_equal([{ 'feature' => true }], pos_args)
     assert_equal({ verbose: true }, kw_args)
+  end
+
+  def test_basic_literal_conversions_for_positional_arguments
+    pos_args, kw_args = @parser.parse(['nil', 'true', 'false', '42', '3.14', 'plain'])
+
+    assert_equal ['nil', true, false, 42, 3.14, 'plain'], pos_args
+    assert_equal({}, kw_args)
+  end
+
+  def test_preserves_raw_expressions_when_eval_mode_is_enabled
+    Rubycli.with_eval_mode(true) do
+      pos_args, kw_args = @parser.parse(['"a"+"b"'])
+      assert_equal(['"a"+"b"'], pos_args)
+      assert_equal({}, kw_args)
+    end
+  end
+
+  def test_preserves_raw_values_when_json_mode_is_enabled
+    Rubycli.with_json_mode(true) do
+      pos_args, kw_args = @parser.parse(['"a"'])
+      assert_equal(['"a"'], pos_args)
+      assert_equal({}, kw_args)
+    end
+  end
+
+  def test_preserves_keyword_values_under_json_mode
+    method = DocExamples::ConciseSamples.new.method(:describe)
+
+    Rubycli.with_json_mode(true) do
+      pos_args, kw_args = @parser.parse(['subject', '--tags', '["alpha","beta"]'], method)
+      assert_equal('subject', pos_args.first)
+      assert_equal({ tags: '["alpha","beta"]' }, kw_args)
+    end
+  end
+
+  def test_preserves_keyword_values_under_eval_mode
+    method = DocExamples::ConciseSamples.new.method(:describe)
+
+    Rubycli.with_eval_mode(true) do
+      pos_args, kw_args = @parser.parse(['subject', '--tags', '[:alpha, :beta]'], method)
+      assert_equal('subject', pos_args.first)
+      assert_equal({ tags: '[:alpha, :beta]' }, kw_args)
+    end
   end
 end

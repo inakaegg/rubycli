@@ -29,6 +29,42 @@ class ModeCoercionTest < Minitest::Test
     refute Rubycli.eval_mode?, 'eval mode should be reset after block'
   end
 
+  def test_eval_mode_handles_strings_with_embedded_quotes
+    pos_args = ['"a" + "b"']
+    kw_args = {}
+
+    Rubycli.with_eval_mode(true) do
+      Rubycli.apply_argument_coercions(pos_args, kw_args)
+    end
+
+    assert_equal(['ab'], pos_args)
+    assert_equal({}, kw_args)
+  end
+
+  def test_json_mode_handles_simple_string_values
+    pos_args = ['"a"']
+    kw_args = {}
+
+    Rubycli.with_json_mode(true) do
+      Rubycli.apply_argument_coercions(pos_args, kw_args)
+    end
+
+    assert_equal(['a'], pos_args)
+    assert_equal({}, kw_args)
+  end
+
+  def test_json_mode_parses_nested_structures_and_keywords
+    pos_args = ['[1, 2, 3]']
+    kw_args = { payload: '{"flag":true,"count":5}', tags: '["alpha","beta"]' }
+
+    Rubycli.with_json_mode(true) do
+      Rubycli.apply_argument_coercions(pos_args, kw_args)
+    end
+
+    assert_equal([[1, 2, 3]], pos_args)
+    assert_equal({ payload: { 'flag' => true, 'count' => 5 }, tags: %w[alpha beta] }, kw_args)
+  end
+
   def test_apply_argument_coercions_rejects_json_and_eval_mix
     pos_args = []
     kw_args = {}

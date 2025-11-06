@@ -282,7 +282,7 @@ The CLI treats `--flag VALUE`, `--flag <value>`, and `--flag=<value>` identicall
 
 You can annotate types using `[String]`, `(String)`, or `(type: String)`—they all convey the same hint, and you can list multiple types such as `(String, nil)` or `(type: String, nil)`.
 
-Repeated values (`VALUE...`) are currently parsed as comma-delimited lists (for example `--tags "one,two"`). Space-separated multi-value flags (`--tags one two`) are not yet supported.
+Repeated values (`VALUE...`) now materialize as arrays automatically whenever the option is documented with an ellipsis (for example `TAG...`) or an explicit array type hint (`[String[]]`, `Array<String>`). Supply either JSON/YAML list syntax (`--tags "[\"build\",\"test\"]"`) or a comma-delimited string (`--tags "build,test"`); Rubycli will coerce both forms to arrays. Space-separated multi-value flags (`--tags build test`) are still not supported, and options without a repeated/array hint continue to be parsed as scalars.
 
 Common inference rules:
 

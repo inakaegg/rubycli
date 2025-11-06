@@ -70,7 +70,29 @@ module Rubycli
         working.unshift('Boolean') unless working.any? { |type| boolean_type?(type) }
       end
 
-      working.uniq
+      if placeholder_info[:list]
+        array_type_present = false
+
+        working = working.map do |type|
+          next type if type.nil? || type.empty?
+
+          if boolean_type?(type) || nil_type?(type)
+            type
+          elsif type.end_with?('[]') || type.start_with?('Array<') || type.casecmp('Array').zero?
+            array_type_present = true
+            type
+          else
+            array_type_present = true
+            "#{type}[]"
+          end
+        end
+
+        unless array_type_present
+          working << 'String[]'
+        end
+      end
+
+      working.compact.uniq
     end
 
     def determine_requires_value(value_placeholder:, types:, boolean_flag:, optional_value:)
@@ -105,6 +127,7 @@ module Rubycli
 
     def parse_list(value)
       return [] if value.nil?
+      return value if value.is_a?(Array)
 
       value.to_s.split(',').map(&:strip).reject(&:empty?)
     end

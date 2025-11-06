@@ -204,10 +204,13 @@ module Rubycli
     end
 
     def convert_arg(arg)
+      return arg if Rubycli.eval_mode? || Rubycli.json_mode?
+      return arg unless arg.is_a?(String)
+
       literal = try_literal_parse(arg)
       return literal unless literal.equal?(LITERAL_PARSE_FAILURE)
 
-      return nil if arg.nil? || arg.casecmp('nil').zero?
+      return nil if arg.nil? || null_literal?(arg)
       return true if arg.casecmp('true').zero?
       return false if arg.casecmp('false').zero?
       return arg.to_i if integer_string?(arg)
@@ -232,9 +235,18 @@ module Rubycli
       trimmed = value.strip
       return value if trimmed.empty?
 
-      Psych.safe_load(trimmed, aliases: false)
+      literal = Psych.safe_load(trimmed, aliases: false)
+      return literal unless literal.nil? && !null_literal?(trimmed)
+
+      LITERAL_PARSE_FAILURE
     rescue Psych::SyntaxError, Psych::DisallowedClass, Psych::Exception
       LITERAL_PARSE_FAILURE
+    end
+
+    def null_literal?(value)
+      return false unless value
+
+      %w[nil null ~].include?(value.strip.downcase)
     end
 
 
@@ -303,7 +315,7 @@ module Rubycli
       when 'String'
         ->(value) { value }
       when 'Integer', 'Fixnum'
-        ->(value) { Integer(value, 10) }
+        ->(value) { Integer(value) }
       when 'Float'
         ->(value) { Float(value) }
       when 'Numeric'
@@ -341,10 +353,25 @@ module Rubycli
     end
 
     def convert_option_value(keyword, value, option_meta, type_converters)
-      converter = type_converters[keyword]
-      return convert_arg(value) unless converter
+      if Rubycli.eval_mode? || Rubycli.json_mode?
+        return convert_arg(value)
+      end
 
-      converter.call(value)
+      converter = type_converters[keyword]
+      converted_value = convert_arg(value)
+      return converted_value unless converter
+
+      original_input = value if value.is_a?(String)
+      expects_list = option_meta && option_meta.types.any? { |type|
+        type.to_s.end_with?('[]') || type.to_s.start_with?('Array<')
+      }
+
+      value_for_converter = converted_value
+      if expects_list && original_input && converted_value.is_a?(Numeric) && original_input.include?(',')
+        value_for_converter = original_input
+      end
+
+      converter.call(value_for_converter)
     rescue StandardError => e
       option_label = option_meta&.long || option_meta&.short || keyword
       raise ArgumentError, "Value '#{value}' for option '#{option_label}' is invalid: #{e.message}"

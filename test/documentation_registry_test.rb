@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'test_helper'
+require_relative '../examples/documentation_style_showcase'
 
 module ExtraDocSamples
   module_function
@@ -208,6 +209,15 @@ class DocumentationRegistryTest < Minitest::Test
     refute tag_opt.boolean_flag
     assert tag_opt.requires_value
     assert_equal ['String'], tag_opt.types
+  end
+
+  def test_list_placeholder_promotes_scalar_type_to_array
+    metadata = @registry.metadata_for(DocumentationStyleShowcase.method(:canonical))
+
+    tags_opt = metadata[:options].find { |opt| opt.keyword == :tags }
+    refute_nil tags_opt
+    assert_equal ['String[]'], tags_opt.types
+    assert_equal '[String[]]', tags_opt.inline_type_text
   end
 
   def test_extra_positional_comments_are_preserved_as_detail_text
