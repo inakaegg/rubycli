@@ -92,6 +92,12 @@ class ArgumentParserTest < Minitest::Test
     assert_equal({ verbose: true }, kw_args)
   end
 
+  def test_comma_delimited_string_stays_literal
+    pos_args, _kw_args = @parser.parse(['1,2,3'])
+
+    assert_equal(['1,2,3'], pos_args)
+  end
+
   def test_basic_literal_conversions_for_positional_arguments
     pos_args, kw_args = @parser.parse(['nil', 'true', 'false', '42', '3.14', 'plain'])
 

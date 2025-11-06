@@ -207,14 +207,21 @@ module Rubycli
       return arg if Rubycli.eval_mode? || Rubycli.json_mode?
       return arg unless arg.is_a?(String)
 
-      literal = try_literal_parse(arg)
-      return literal unless literal.equal?(LITERAL_PARSE_FAILURE)
+      trimmed = arg.strip
+      return arg if trimmed.empty?
 
-      return nil if arg.nil? || null_literal?(arg)
-      return true if arg.casecmp('true').zero?
-      return false if arg.casecmp('false').zero?
-      return arg.to_i if integer_string?(arg)
-      return arg.to_f if float_string?(arg)
+      if literal_like?(trimmed)
+        literal = try_literal_parse(arg)
+        return literal unless literal.equal?(LITERAL_PARSE_FAILURE)
+      end
+
+      return nil if null_literal?(trimmed)
+
+      lower = trimmed.downcase
+      return true if lower == 'true'
+      return false if lower == 'false'
+      return arg.to_i if integer_string?(trimmed)
+      return arg.to_f if float_string?(trimmed)
 
       arg
     end
@@ -246,7 +253,16 @@ module Rubycli
     def null_literal?(value)
       return false unless value
 
-      %w[nil null ~].include?(value.strip.downcase)
+      %w[null ~].include?(value.downcase)
+    end
+
+    def literal_like?(value)
+      return false unless value
+      return true if value.start_with?('[', '{', '"', "'")
+      return true if value.start_with?('---')
+      return true if value.match?(/\A(?:true|false|null|nil)\z/i)
+
+      false
     end
 
 

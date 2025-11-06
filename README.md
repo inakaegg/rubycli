@@ -360,7 +360,7 @@ In short, comments never add live parameters by themselves; they enrich or descr
 
 ### Default literal parsing
 
-Rubycli tries to interpret every argument as a safe Ruby literal using `Psych.safe_load` before handing it to your code. That means values such as `--names='["Alice","Bob"]'` or `--config='{foo: 1}'` arrive as native arrays / hashes without any extra flags. Unsupported constructs fall back to plain strings, so `"2024-01-01"` stays a string (Date is not auto-instantiated) and malformed payloads still reach your method instead of killing the run.
+Rubycli tries to interpret arguments that look like structured literals (values starting with `{`, `[`, quotes, or YAML front matter) using `Psych.safe_load` before handing them to your code. That means values such as `--names='["Alice","Bob"]'` or `--config='{foo: 1}'` arrive as native arrays / hashes without any extra flags. Plain strings like `1,2,3` stay untouched at this stage (if the documentation declares `String[]` or `TAG...`, a later pass still normalises them into arrays), and unsupported constructs fall back to the original text, so `"2024-01-01"` remains a string and malformed payloads still reach your method instead of killing the run.
 
 ### JSON mode
 

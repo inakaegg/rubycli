@@ -9,10 +9,12 @@
 ### Documentation
 - Linked the showcase example from the English and Japanese READMEs to highlight the new syntax.
 - Clarified that optional arguments do not require brackets in comments and noted the current comma-delimited behaviour for repeated values.
+- Documented the refined literal parsing guard rails so only structured values auto-coerce while plain strings stay untouched unless type hints request otherwise.
 
 ### Fixed
 - Restored uppercase positional placeholders in the generated help output so the default style stays consistent.
 - Help renderer now preserves documented placeholder casing instead of wrapping everything in `<...>`.
+- Default literal parsing now skips generic strings to avoid collapsing comma-separated inputs, while still supporting array coercion when documentation specifies list types.
 
 ## [0.1.1] - 2025-11-01
 
