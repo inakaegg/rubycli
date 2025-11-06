@@ -129,10 +129,44 @@ class DocumentationRegistryTest < Minitest::Test
 
     tags_opt = options.last
     assert_equal '--tags', tags_opt.long
-    assert_equal ['Array<String>'], tags_opt.types
+    assert_equal ['String[]'], tags_opt.types
     assert tags_opt.inline_type_annotation
-    assert_equal '[Array<String>]', tags_opt.inline_type_text
+    assert_equal '[String[]]', tags_opt.inline_type_text
     assert_equal 'Comma-separated tags', tags_opt.description
+  end
+
+  def test_parenthesized_type_annotations
+    method = DocExamples::TypeHintSamples.instance_method(:analyse)
+    metadata = @registry.metadata_for(method)
+
+    positionals = metadata[:positionals]
+    assert_equal 2, positionals.size
+
+    file_doc, pattern_doc = positionals
+    assert_equal '<file>', file_doc.label
+    assert_equal ['String'], file_doc.types
+    assert file_doc.inline_type_annotation
+    assert_equal '[String]', file_doc.inline_type_text
+
+    assert_equal '<pattern>', pattern_doc.label
+    assert_equal ['String', 'nil'], pattern_doc.types
+    assert pattern_doc.inline_type_annotation
+    assert_equal '[String, nil]', pattern_doc.inline_type_text
+
+    format_opt = metadata[:options].find { |opt| opt.keyword == :format }
+    refute_nil format_opt
+    assert_equal '--format', format_opt.long
+    assert_equal ['String'], format_opt.types
+    assert format_opt.inline_type_annotation
+    assert_equal '[String]', format_opt.inline_type_text
+
+    tags_opt = metadata[:options].find { |opt| opt.keyword == :tags }
+    refute_nil tags_opt
+    assert_equal '--tags', tags_opt.long
+    assert_equal ['String[]'], tags_opt.types
+    assert tags_opt.inline_type_annotation
+    assert_equal '[String[]]', tags_opt.inline_type_text
+    assert tags_opt.value_name.start_with?('<tag>')
   end
 
   def test_boolean_and_optional_value_detection

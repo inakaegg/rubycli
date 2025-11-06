@@ -365,7 +365,7 @@ module Rubycli
     def parse_positional_line(line)
       return nil if line.start_with?('--') || line.start_with?('-')
 
-      tokens = line.split(/\s+/)
+      tokens = combine_bracketed_tokens(line.split(/\s+/))
       placeholder = tokens.shift
       return nil unless placeholder
 
@@ -656,6 +656,7 @@ module Rubycli
       BigDecimal
       File
       Pathname
+      nil
     ].freeze
 
     def parse_type_annotation(type_str)
@@ -663,7 +664,9 @@ module Rubycli
 
       cleaned = type_str.strip
       cleaned = cleaned.delete_prefix('@')
+      cleaned = cleaned[1..-2].strip if cleaned.start_with?('(') && cleaned.end_with?(')')
       cleaned = cleaned[1..-2] if cleaned.start_with?('[') && cleaned.end_with?(']')
+      cleaned = cleaned.sub(/\Atype\s*:\s*/i, '')
       cleaned.split(/[,|]/).map { |token| normalize_type_token(token) }.reject(&:empty?)
     end
 
@@ -755,6 +758,7 @@ module Rubycli
     def combine_bracketed_tokens(tokens)
       combined = []
       buffer = nil
+      closing = nil
 
       tokens.each do |token|
         next if token.nil?
@@ -762,12 +766,17 @@ module Rubycli
         if buffer
           buffer << ' ' unless token.empty?
           buffer << token
-          if token.include?(']')
+          if closing && token.include?(closing)
             combined << buffer
             buffer = nil
+            closing = nil
           end
         elsif token.start_with?('[') && !token.include?(']')
           buffer = token.dup
+          closing = ']'
+        elsif token.start_with?('(') && !token.include?(')')
+          buffer = token.dup
+          closing = ')'
         else
           combined << token
         end

@@ -30,7 +30,7 @@ Usage: hello_app.rb COMMAND [arguments]
 
 Available commands:
   Class methods:
-    greet                <name>
+    greet                <NAME>
 
 Detailed command help: hello_app.rb COMMAND help
 Enable debug logging: --debug or RUBYCLI_DEBUG=true
@@ -42,10 +42,10 @@ rubycli examples/hello_app.rb greet
 
 ```text
 Error: wrong number of arguments (given 0, expected 1)
-Usage: hello_app.rb greet <NAME>
+Usage: hello_app.rb greet NAME
 
 Positional arguments:
-  NAME
+  NAME    required
 ```
 
 ```bash
@@ -104,7 +104,7 @@ Usage: hello_app_with_docs.rb COMMAND [arguments]
 
 Available commands:
   Class methods:
-    greet                <name> [--shout=<value>]
+    greet                <NAME> [--shout]
 
 Detailed command help: hello_app_with_docs.rb COMMAND help
 Enable debug logging: --debug or RUBYCLI_DEBUG=true
@@ -115,13 +115,13 @@ rubycli examples/hello_app_with_docs.rb greet --help
 ```
 
 ```text
-Usage: hello_app_with_docs.rb greet <NAME> [--shout]
+Usage: hello_app_with_docs.rb greet NAME [--shout]
 
 Positional arguments:
-  NAME  [String] 挨拶対象
+  NAME  [String]  required  挨拶対象
 
 Options:
-  --shout  [Boolean] 大文字で出力 (default: false)
+  --shout  [Boolean]  optional  大文字で出力 (default: false)
 ```
 
 ```bash
@@ -257,6 +257,8 @@ rubycli scripts/multi_runner.rb Admin::Runner list --active
 - `--flag VALUE [Type] 説明`
 - `-f --flag VALUE [Type] 説明`
 
+README のサンプルは既定スタイルとして大文字プレースホルダ（`NAME`, `VALUE` など）を使用しています。次項以降の表記揺れは、必要に応じて選べる追加記法です。
+
 ### 互換プレースホルダ表記
 
 コメントやヘルプ出力では次の表記も同じ意味として解釈されます。
@@ -267,6 +269,12 @@ rubycli scripts/multi_runner.rb Admin::Runner list --active
 
 実行時には `--flag VALUE`, `--flag <value>`, `--flag=<value>` のどれで入力しても同じ扱いです。プロジェクトで読みやすいスタイルを選択してください。`[VALUE]` や `[VALUE...]` のような表記を使うと、真偽値・任意値・リストなどの推論が働きます。値プレースホルダを省略したオプション（例: `--quiet`）は自動で Boolean フラグとして扱われます。
 
+> 補足: コメント内で任意引数を角括弧で表す必要はありません。Ruby 側のメソッドシグネチャから必須／任意は自動判定され、ヘルプ出力では Rubycli が適切に角括弧を追加します。
+
+型ヒントは `[String]`, `(String)`, `(type: String)` のように角括弧・丸括弧・`type:` プレフィックスのいずれでも指定できます。複数型は `(String, nil)` や `(type: String, nil)` のように列挙してください。
+
+`VALUE...` のような繰り返し指定は、現在カンマ区切り（例: `--tags "one,two"`）で解釈されます。スペース区切りの複数値入力（`--tags one two`）にはまだ対応していません。
+
 代表的な推論例:
 
 - `ARG1` のように型ラベルを省略したプレースホルダは既定で `String` として扱われます。
@@ -274,6 +282,8 @@ rubycli scripts/multi_runner.rb Admin::Runner list --active
 - `--verbose` のように値プレースホルダを省略したオプションは Boolean フラグとして扱われます。
 
 `@example` や `@raise`, `@see`, `@deprecated` などその他の YARD タグは、現状ヘルプ出力には反映されません。
+
+> すべての記法をまとめて試したい場合は `rubycli examples/documentation_style_showcase.rb canonical --help` や `... angled --help` などを実行してみてください。
 
 従来の `@param` 記法も既定で利用できます。簡潔なプレースホルダ記法だけに限定したい場合は `RUBYCLI_ALLOW_PARAM_COMMENT=OFF` を設定してください（厳格モードでの検証は継続されます）。
 
@@ -305,7 +315,7 @@ Usage: fallback_example.rb COMMAND [arguments]
 
 Available commands:
   Class methods:
-    scale                <amount> [<factor>] [--clamp=<CLAMP>] [--notify]
+    scale                AMOUNT [<FACTOR>] [--clamp=<value>] [--notify]
 
 Detailed command help: fallback_example.rb COMMAND help
 Enable debug logging: --debug or RUBYCLI_DEBUG=true
@@ -316,15 +326,15 @@ rubycli examples/fallback_example.rb scale --help
 ```
 
 ```text
-Usage: fallback_example.rb scale <AMOUNT> [<FACTOR>] [--clamp=<CLAMP>] [--notify]
+Usage: fallback_example.rb scale AMOUNT [FACTOR] [--clamp=<CLAMP>] [--notify]
 
 Positional arguments:
-  AMOUNT    [Integer] 処理対象の数値
-  [FACTOR]  (default: 2)
+  AMOUNT  [Integer]  required  処理対象の数値
+  FACTOR             optional  (default: 2)
 
 Options:
-  --clamp=<CLAMP>  (type: String) (default: nil)
-  --notify       (type: Boolean) (default: false)
+  --clamp=<CLAMP>  [String]   optional  (default: nil)
+  --notify         [Boolean]  optional  (default: false)
 ```
 
 `AMOUNT` だけがドキュメント化されていますが、`factor` や `clamp`, `notify` も自動的に補完され、既定値や型が推論されていることがわかります。コメントとシグネチャの矛盾を早期に検知したい場合は `RUBYCLI_STRICT=ON` で厳格モードを有効化してください。

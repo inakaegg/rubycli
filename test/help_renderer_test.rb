@@ -24,15 +24,15 @@ class HelpRendererTest < Minitest::Test
 
       Supports both positional and keyword documentation using YARD tags.
 
-      Usage: rubycli greet <NAME> [-g, --greeting=<GREETING>] [-s, --shout] [--punctuation=<PUNCT>]
+      Usage: rubycli greet NAME [-g, --greeting=<GREETING>] [-s, --shout] [--punctuation=<PUNCT>]
 
       Positional arguments:
-        NAME  Person to greet (type: String)
+        NAME  [String]  required  Person to greet
 
       Options:
-        -g, --greeting=<GREETING>  Greeting prefix (type: String) (default: 'Hello')
-        -s, --shout                Emit uppercase output (type: Boolean) (default: false)
-        --punctuation=<PUNCT>      Optional punctuation suffix (type: String | nil) (default: nil)
+        -g, --greeting=<GREETING>  [String]       optional  Greeting prefix (default: 'Hello')
+        -s, --shout                [Boolean]      optional  Emit uppercase output (default: false)
+        --punctuation=<PUNCT>      [String, nil]  optional  Optional punctuation suffix (default: nil)
 
       Return values:
         String  Finalised greeting
@@ -48,15 +48,15 @@ class HelpRendererTest < Minitest::Test
     expected = <<~HELP.strip
       Deliberately underspecified to exercise fallbacks.
 
-      Usage: rubycli fallback <NAME> [<ATTEMPTS>] [--safe-mode] [--tag=<value>]
+      Usage: rubycli fallback NAME [ATTEMPTS] [--safe-mode] [--tag=<TAG>]
 
       Positional arguments:
-        NAME
-        [ATTEMPTS]  (default: 3)
+        NAME        required
+        ATTEMPTS    optional  (default: 3)
 
       Options:
-        --safe-mode  (type: Boolean) (default: true)
-        --tag=<TAG>  (type: String) (default: nil)
+        --safe-mode  [Boolean]  optional  (default: true)
+        --tag=<TAG>  [String]   optional  (default: nil)
     HELP
 
     assert_usage(expected, usage)
@@ -71,7 +71,13 @@ class HelpRendererTest < Minitest::Test
   def test_method_description_falls_back_to_signature
     method = DocExamples::TaggedSamples.new.method(:process)
     description = @renderer.method_description(method)
-    assert_equal '<data> [--verbose=<value>]', description
+    assert_equal 'JSON [-v, --verbose]', description
+  end
+
+  def test_method_description_preserves_documented_placeholders
+    method = DocExamples::TypeHintSamples.new.method(:analyse)
+    description = @renderer.method_description(method)
+    assert_equal '<file> [<pattern>] [--format=<format>] [--tags=<tag>...]', description
   end
 
   private

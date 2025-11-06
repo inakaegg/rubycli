@@ -28,10 +28,10 @@ module DocExamples
   class ConciseSamples
     # Create a descriptor for a subject.
     #
-    # <subject> [String] Subject to describe
-    # [<count>] [Integer] Number of repetitions
-    # --style -s <style> [String] Style flag
-    # --tags=<tags> [Array<String>] Comma-separated tags
+    # <subject> (String) Subject to describe
+    # [<count>] (Integer) Number of repetitions
+    # --style -s <style> (String) Style flag
+    # --tags=<tag>... (type: String[]) Comma-separated tags
     # => [String] Description text
     def describe(subject, count = 1, style: nil, tags: nil)
       base = ([subject] * count).join(' ')
@@ -53,6 +53,21 @@ module DocExamples
     # Deliberately underspecified to exercise fallbacks.
     def fallback(name, attempts = 3, safe_mode: true, tag: nil)
       { name: name, attempts: attempts, safe_mode: safe_mode, tag: tag }
+    end
+  end
+
+  class TypeHintSamples
+    # <file> (String) File path to analyse
+    # [<pattern>] (type: String, nil) Optional pattern to filter with
+    # --format=<format> (String) Output format label
+    # --tags <tag>... (type:String[]) Tags forwarded to the renderer
+    def analyse(file, pattern = nil, format: 'plain', tags: nil)
+      {
+        file: file,
+        pattern: pattern,
+        format: format,
+        tags: Array(tags)
+      }
     end
   end
 end

@@ -19,6 +19,10 @@ module Rubycli
       trimmed = trimmed.delete_prefix('@')
       return '' if trimmed.empty?
 
+      trimmed = trimmed[1..-2].strip if trimmed.start_with?('(') && trimmed.end_with?(')')
+      trimmed = trimmed.sub(/\Atype\s*:\s*/i, '').strip
+      return '' if trimmed.empty?
+
       if trimmed.include?('<') && trimmed.end_with?('>')
         trimmed
       elsif trimmed.end_with?('[]')

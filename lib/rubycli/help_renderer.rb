@@ -53,21 +53,8 @@ module Rubycli
       summary = metadata[:summary]
       return summary if summary && !summary.empty?
 
-      params = method_obj.parameters
-      return "(no arguments)" if params.empty?
-
-      param_desc = params.map { |type, name|
-        case type
-        when :req then "<#{name}>"
-        when :opt then "[<#{name}>]"
-        when :rest then "[<#{name}>...]"
-        when :keyreq then "--#{name.to_s.tr("_", "-")}=<value>"
-        when :key then "[--#{name.to_s.tr("_", "-")}=<value>]"
-        when :keyrest then "[--<option>...]"
-        end
-      }.compact.join(" ")
-
-      param_desc.empty? ? "(no arguments)" : param_desc
+      params_str = format_method_parameters(method_obj.parameters, metadata)
+      params_str.empty? ? "(no arguments)" : params_str
     end
 
     def usage_for_method(command, method)
@@ -78,59 +65,8 @@ module Rubycli
       options = metadata[:options] || []
       positionals_in_order = ordered_positionals(method, metadata)
 
-      if positionals_in_order.any?
-        labels = positionals_in_order.map { |info| info[:label] }
-        max_label_length = labels.map(&:length).max || 0
-
-        usage_lines << ""
-        usage_lines << "Positional arguments:"
-        positionals_in_order.each do |info|
-          definition = info[:definition]
-          description_parts = []
-          if definition&.inline_type_annotation && definition.inline_type_text
-            description_parts << definition.inline_type_text
-          end
-          type_info = positional_type_display(definition)
-          if type_info && type_info_first?(definition)
-            description_parts << type_info
-          end
-          description_parts << info[:description] if info[:description]
-          description_parts << type_info if type_info && !type_info_first?(definition)
-          default_text = positional_default_display(definition)
-          description_parts << default_text if default_text
-          description_text = description_parts.join(' ')
-          line = "  #{info[:label].ljust(max_label_length)}"
-          line += "  #{description_text}" unless description_text.empty?
-          usage_lines << line
-        end
-      end
-
-      if options.any?
-        option_labels = options.map { |opt| option_flag_with_placeholder(opt) }
-        max_label_length = option_labels.map(&:length).max || 0
-
-        usage_lines << "" unless usage_lines.last == ""
-        usage_lines << "Options:"
-        options.each_with_index do |opt, idx|
-          label = option_labels[idx]
-          description_parts = []
-          if opt.inline_type_annotation && opt.inline_type_text
-            description_parts << opt.inline_type_text
-          end
-          type_info = option_type_display(opt)
-          if type_info && type_info_first?(opt)
-            description_parts << type_info
-          end
-          description_parts << opt.description if opt.description
-          description_parts << type_info if type_info && !type_info_first?(opt)
-          default_info = option_default_display(opt)
-          description_parts << default_info if default_info
-          description_text = description_parts.join(' ')
-          line = "  #{label.ljust(max_label_length)}"
-          line += "  #{description_text}" unless description_text.empty?
-          usage_lines << line
-        end
-      end
+      usage_lines.concat(render_positionals(positionals_in_order)) if positionals_in_order.any?
+      usage_lines.concat(render_options(options, required_keyword_names(method))) if options.any?
 
       returns = metadata[:returns] || []
       if returns.any?
@@ -168,14 +104,11 @@ module Rubycli
       parameters.map { |type, name|
         case type
         when :req
-          doc = positional_map[name]
-          label = doc&.label || name.to_s.upcase
-          "<#{label}>"
+          positional_usage_token(type, name, positional_map[name])
         when :opt
-          doc = positional_map[name]
-          label = doc&.label || name.to_s.upcase
-          "[<#{label}>]"
-        when :rest then "[<#{name}>...]"
+          positional_usage_token(type, name, positional_map[name])
+        when :rest
+          positional_usage_token(type, name, positional_map[name])
         when :keyreq
           opt = option_map[name]
           if opt
@@ -202,15 +135,97 @@ module Rubycli
         when :keyrest then "[--<option>...]"
         else ""
         end
-      }.reject(&:empty?).join(" ")
+      }.compact.reject(&:empty?).join(" ")
     end
 
     def auto_generated_option_usage_label(name, opt)
       base_flag = "--#{name.to_s.tr('_', '-')}"
       return base_flag if opt.boolean_flag
 
-      "#{base_flag}=<value>"
+      value_name = opt.value_name
+      formatted = if value_name && !value_name.to_s.strip.empty?
+                    ensure_angle_bracket_placeholder(value_name)
+                  else
+                    "<value>"
+                  end
+      "#{base_flag}=#{formatted}"
     end
+
+    def render_positionals(positionals_in_order)
+      rows = positionals_in_order.map do |info|
+        definition = info[:definition]
+        label = info[:label]
+        type = formatted_types(definition&.types)
+        requirement = positional_requirement(info[:kind])
+        description_parts = []
+        description_parts << info[:description] if info[:description]
+        default_text = positional_default(definition)
+        description_parts << default_text if default_text
+        [label, type, requirement, description_parts.join(' ')]
+      end
+      table_block("Positional arguments:", rows)
+    end
+
+    def render_options(options, required_keywords)
+      rows = options.map do |opt|
+        label = option_flag_with_placeholder(opt)
+        type = formatted_types(opt.types)
+        requirement = required_keywords.include?(opt.keyword) ? 'required' : 'optional'
+        description_parts = []
+        description_parts << opt.description if opt.description
+        default_text = option_default(opt)
+        description_parts << default_text if default_text
+        [label, type, requirement, description_parts.join(' ').strip]
+      end
+      table_block("Options:", rows)
+    end
+
+    def table_block(header, rows)
+      return [] if rows.empty?
+
+      cols = rows.transpose
+      widths = cols.map { |col| col.map { |value| value.to_s.length }.max || 0 }
+
+      lines = ["", header]
+      rows.each do |row|
+        padded = row.each_with_index.map do |value, idx|
+          text = value.to_s
+          idx < row.length - 1 ? text.ljust(widths[idx]) : text
+        end
+        lines << "  #{padded.join('  ')}".rstrip
+      end
+      lines
+    end
+
+    def formatted_types(types)
+      type_list = Array(types).compact.map(&:to_s).reject(&:empty?).uniq
+      return '' if type_list.empty?
+
+      "[#{type_list.join(', ')}]"
+    end
+
+    def positional_requirement(kind)
+      kind == :opt ? 'optional' : 'required'
+    end
+
+    def positional_default(definition)
+      return nil unless definition
+      value = definition.default_value
+      return nil if value.nil? || value.to_s.empty?
+
+      "(default: #{value})"
+    end
+
+ def option_default(opt)
+   value = opt.default_value
+   return nil if value.nil? || value.to_s.empty?
+
+   "(default: #{value})"
+ end
+
+ def required_keyword_names(method)
+   method.parameters.select { |type, _| type == :keyreq }.map { |_, name| name }
+ end
 
     def ordered_positionals(method, metadata)
       positional_map = metadata[:positionals_map] || {}
@@ -218,37 +233,65 @@ module Rubycli
         next unless %i[req opt].include?(type)
 
         definition = positional_map[name]
-        label = if definition
-            type == :opt ? "[#{definition.label}]" : definition.label
-          else
-            base = name.to_s.upcase
-            type == :opt ? "[#{base}]" : base
-          end
+        label = display_label_for(definition, name)
         description = definition&.description
-        memo << { label: label, description: description, definition: definition }
+        memo << { label: label, description: description, definition: definition, kind: type }
       end
     end
 
-    def positional_type_display(definition)
-      return nil unless definition
-      return nil if definition.inline_type_annotation
-      return nil if definition.types.nil? || definition.types.empty?
+    def display_label_for(definition, name)
+      return definition.label if definition&.label && !definition.label.to_s.empty?
 
-      unique_types = definition.types.reject(&:empty?).uniq
-      return nil if unique_types.empty?
+      name.to_s.upcase
+    end
 
-      if definition.respond_to?(:doc_format) && definition.doc_format == :rubycli
-        "[#{unique_types.join(', ')}]"
+    def positional_usage_token(type, name, definition)
+      placeholder = extract_positional_placeholder(definition)
+      case type
+      when :req
+        required_placeholder(placeholder, definition, name)
+      when :opt
+        optional_placeholder(placeholder, definition, name)
+      when :rest
+        rest_placeholder(placeholder, definition, name)
       else
-        "(type: #{unique_types.join(' | ')})"
+        nil
       end
     end
 
-    def positional_default_display(definition)
-      return nil unless definition && definition.default_value
-      return nil if definition.default_value.to_s.empty?
+    def extract_positional_placeholder(definition)
+      return nil unless definition
+      return nil if definition.doc_format.nil?
 
-      "(default: #{definition.default_value})"
+      token = definition.placeholder.to_s.strip
+      token.empty? ? nil : token
+    end
+
+    def required_placeholder(placeholder, definition, name)
+      return placeholder.strip unless placeholder.nil? || placeholder.strip.empty?
+
+      default_positional_label(definition, name, uppercase: true)
+    end
+
+    def optional_placeholder(placeholder, definition, name)
+      return placeholder.strip unless placeholder.nil? || placeholder.strip.empty?
+
+      "[#{default_positional_label(definition, name, uppercase: true)}]"
+    end
+
+    def rest_placeholder(placeholder, definition, name)
+      return placeholder.strip unless placeholder.nil? || placeholder.strip.empty?
+
+      base = default_positional_label(definition, name, uppercase: true)
+      "[#{base}...]"
+    end
+
+    def default_positional_label(definition, name, uppercase:)
+      label = definition&.label
+      label = label.to_s.strip unless label.nil?
+      label = nil if label.respond_to?(:empty?) && label.empty?
+      base = label || name.to_s
+      uppercase ? base.upcase : base
     end
 
     def option_flag_with_placeholder(opt)
@@ -296,30 +339,6 @@ module Rubycli
 
       formatted_core = "#{formatted_core}..." if ellipsis
       optional ? "[#{formatted_core}]" : formatted_core
-    end
-
-    def option_type_display(opt)
-      return nil if opt.inline_type_annotation
-      return nil if opt.types.nil? || opt.types.empty?
-
-      unique_types = opt.types.reject(&:empty?).uniq
-      return nil if unique_types.empty?
-
-      if opt.respond_to?(:doc_format) && opt.doc_format == :rubycli
-        "[#{unique_types.join(', ')}]"
-      else
-        "(type: #{unique_types.join(' | ')})"
-      end
-    end
-
-    def option_default_display(opt)
-      return nil if opt.default_value.nil? || opt.default_value.to_s.empty?
-
-      "(default: #{opt.default_value})"
-    end
-
-    def type_info_first?(definition)
-      definition.respond_to?(:doc_format) && definition.doc_format == :rubycli
     end
   end
 end

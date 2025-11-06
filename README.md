@@ -32,7 +32,7 @@ Usage: hello_app.rb COMMAND [arguments]
 
 Available commands:
   Class methods:
-    greet                <name>
+    greet                <NAME>
 
 Detailed command help: hello_app.rb COMMAND help
 Enable debug logging: --debug or RUBYCLI_DEBUG=true
@@ -44,10 +44,10 @@ rubycli examples/hello_app.rb greet
 
 ```text
 Error: wrong number of arguments (given 0, expected 1)
-Usage: hello_app.rb greet <NAME>
+Usage: hello_app.rb greet NAME
 
 Positional arguments:
-  NAME
+  NAME    required
 ```
 
 ```bash
@@ -106,7 +106,7 @@ Usage: hello_app_with_docs.rb COMMAND [arguments]
 
 Available commands:
   Class methods:
-    greet                <name> [--shout=<value>]
+    greet                <NAME> [--shout]
 
 Detailed command help: hello_app_with_docs.rb COMMAND help
 Enable debug logging: --debug or RUBYCLI_DEBUG=true
@@ -117,13 +117,13 @@ rubycli examples/hello_app_with_docs.rb greet --help
 ```
 
 ```text
-Usage: hello_app_with_docs.rb greet <NAME> [--shout]
+Usage: hello_app_with_docs.rb greet NAME [--shout]
 
 Positional arguments:
-  NAME  [String] Name to greet
+  NAME  [String]  required  Name to greet
 
 Options:
-  --shout  [Boolean] Print in uppercase (default: false)
+  --shout  [Boolean]  optional  Print in uppercase (default: false)
 ```
 
 ```bash
@@ -266,6 +266,8 @@ Short options are optional and order-independent, so the following examples are 
 - `--flag VALUE [Type] Description`
 - `-f --flag VALUE [Type] Description`
 
+Our examples keep the classic uppercase placeholders (`NAME`, `VALUE`) as the canonical style; the variations below are optional sugar.
+
 ### Alternate placeholder notations
 
 Rubycli also understands these syntaxes when parsing comments and rendering help:
@@ -276,6 +278,12 @@ Rubycli also understands these syntaxes when parsing comments and rendering help
 
 The CLI treats `--flag VALUE`, `--flag <value>`, and `--flag=<value>` identically at runtime—document with whichever variant your team prefers. Optional placeholders like `[VALUE]` or `[VALUE...]` let Rubycli infer boolean flags, optional values, and list coercion. When you omit the placeholder entirely (for example `--quiet`), Rubycli infers a Boolean flag automatically.
 
+> Tip: You do not need to wrap optional arguments in brackets inside the comment. Rubycli already knows which parameters are optional from the Ruby signature and will introduce the brackets in generated help.
+
+You can annotate types using `[String]`, `(String)`, or `(type: String)`—they all convey the same hint, and you can list multiple types such as `(String, nil)` or `(type: String, nil)`.
+
+Repeated values (`VALUE...`) are currently parsed as comma-delimited lists (for example `--tags "one,two"`). Space-separated multi-value flags (`--tags one two`) are not yet supported.
+
 Common inference rules:
 
 - Writing a placeholder such as `ARG1` (without `[String]`) makes Rubycli treat it as a `String`.
@@ -283,6 +291,8 @@ Common inference rules:
 - Omitting the placeholder entirely (`--verbose`) produces a Boolean flag.
 
 Other YARD tags such as `@example`, `@raise`, `@see`, and `@deprecated` are currently ignored by the CLI renderer.
+
+> Want to explore every notation in a single script? Try `rubycli examples/documentation_style_showcase.rb canonical --help`, `... angled --help`, or the other showcase commands.
 
 YARD-style `@param` annotations continue to work out of the box. If you want to enforce the concise placeholder syntax exclusively, set `RUBYCLI_ALLOW_PARAM_COMMENT=OFF` (strict mode still applies either way).
 
@@ -314,7 +324,7 @@ Usage: fallback_example.rb COMMAND [arguments]
 
 Available commands:
   Class methods:
-    scale                <amount> [<factor>] [--clamp=<CLAMP>] [--notify]
+    scale                AMOUNT [<FACTOR>] [--clamp=<value>] [--notify]
 
 Detailed command help: fallback_example.rb COMMAND help
 Enable debug logging: --debug or RUBYCLI_DEBUG=true
@@ -325,15 +335,15 @@ rubycli examples/fallback_example.rb scale --help
 ```
 
 ```text
-Usage: fallback_example.rb scale <AMOUNT> [<FACTOR>] [--clamp=<CLAMP>] [--notify]
+Usage: fallback_example.rb scale AMOUNT [FACTOR] [--clamp=<CLAMP>] [--notify]
 
 Positional arguments:
-  AMOUNT    [Integer] Base amount to process
-  [FACTOR]  (default: 2)
+  AMOUNT  [Integer]  required  Base amount to process
+  FACTOR             optional  (default: 2)
 
 Options:
-  --clamp=<CLAMP>  (type: String) (default: nil)
-  --notify       (type: Boolean) (default: false)
+  --clamp=<CLAMP>  [String]   optional  (default: nil)
+  --notify         [Boolean]  optional  (default: false)
 ```
 
 Here only `AMOUNT` is documented, yet `factor`, `clamp`, and `notify` are still presented with sensible defaults and inferred types. Enable strict mode (`RUBYCLI_STRICT=ON`) if you want mismatches between comments and signatures to surface as warnings during development.
