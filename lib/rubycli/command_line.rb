@@ -15,8 +15,7 @@ module Rubycli
         --pre-script=<src>   Evaluate Ruby code and use its result as the exposed target (--init alias; also accepts space-separated form)
         --json-args, -j      Parse all following arguments strictly as JSON (no YAML literals)
         --eval-args, -e      Evaluate following arguments as Ruby code
-        --auto-target        Auto-select the only callable constant when names don't match
-        --strict-target      Require explicit CLASS_OR_MODULE unless names match (default)
+        --auto-target, -a    Auto-select the only callable constant when names don't match
         (Note: --json-args and --eval-args are mutually exclusive)
         (Note: Every option that accepts a value understands both --flag=value and --flag value forms.)
 
@@ -74,13 +73,10 @@ module Rubycli
         when '--eval-args', '-e'
           eval_mode = true
           args.shift
-        when '--print-result'
-          args.shift
-        when '--auto-target'
+       when '--print-result'
+         args.shift
+        when '--auto-target', '-a'
           constant_mode = :auto
-          args.shift
-        when '--strict-target'
-          constant_mode = :strict
           args.shift
         when '--'
           args.shift
