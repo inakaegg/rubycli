@@ -78,7 +78,10 @@ module Rubycli
     end
 
     def run(target, args = ARGV, cli_mode = true)
-      cli.run(target, args.dup, cli_mode)
+      status = cli.run(target, args.dup, cli_mode)
+      return status unless cli_mode
+
+      exit(status.to_i)
     end
 
     def parse_arguments(args, method = nil)

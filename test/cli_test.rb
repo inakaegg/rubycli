@@ -47,12 +47,11 @@ class CLITest < Minitest::Test
 
     method_obj = target.method(:info)
 
+    status = nil
     out, _err = capture_io do
-      exit_error = assert_raises(SystemExit) do
-        @cli.send(:execute_parameterless_method, method_obj, 'info', ['--help'], true)
-      end
-      assert_equal 0, exit_error.status
+      status = @cli.send(:execute_parameterless_method, method_obj, 'info', ['--help'], true)
     end
+    assert_equal 0, status
 
     assert_equal 0, target.calls
     assert_includes out, 'Usage: rubycli info'

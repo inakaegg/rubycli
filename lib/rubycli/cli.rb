@@ -37,7 +37,7 @@ module Rubycli
 
       if should_show_help?(args)
         @help_renderer.print_help(target, catalog)
-        exit(0)
+        return 0
       end
 
       command = args.shift
@@ -105,7 +105,7 @@ module Rubycli
         error_msg = "Command '#{command}' is not available."
         puts error_msg
         @help_renderer.print_help(target, catalog)
-        exit(1)
+        1
       end
     end
 
@@ -116,6 +116,7 @@ module Rubycli
       begin
         result = Rubycli.call_target(target, pos_args, kw_args)
         @result_emitter.emit(result)
+        0
       rescue StandardError => e
         handle_execution_error(e, command, method, pos_args, kw_args, cli_mode)
       end
@@ -132,15 +133,16 @@ module Rubycli
     def execute_parameterless_method(method_obj, command, args, cli_mode)
       if help_requested_for_parameterless?(args)
         puts usage_for_method(command, method_obj)
-        exit(0)
+        return 0
       end
 
       begin
         result = method_obj.call
         debug_log "Parameterless method returned: #{result.inspect}"
         if result
-          run(result, args, false)
+          return run(result, args, false)
         end
+        0
       rescue StandardError => e
         handle_execution_error(e, command, method_obj, [], {}, cli_mode)
       end
@@ -152,12 +154,13 @@ module Rubycli
 
       if should_show_method_help?(pos_args, kw_args)
         puts usage_for_method(command, method_obj)
-        exit(0)
+        return 0
       end
 
       begin
         result = Rubycli.call_target(method_obj, pos_args, kw_args)
         @result_emitter.emit(result)
+        0
       rescue StandardError => e
         handle_execution_error(e, command, method_obj, pos_args, kw_args, cli_mode)
       end
@@ -181,7 +184,7 @@ module Rubycli
       if cli_mode && !arguments_match?(method_obj, pos_args, kw_args) && usage_error?(error)
         puts "Error: #{error.message}"
         puts usage_for_method(command, method_obj)
-        exit(1)
+        1
       else
         raise error
       end
