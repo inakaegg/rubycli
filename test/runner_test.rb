@@ -93,7 +93,7 @@ class RunnerTest < Minitest::Test
       end
       assert_match('TracePointCapturedRunner', error.message)
       assert_match('specifying the constant explicitly', error.message)
-      assert_match('--auto-constant', error.message)
+      assert_match('--auto-target', error.message)
     ensure
       Object.send(:remove_const, :TracePointCapturedRunner) if Object.const_defined?(:TracePointCapturedRunner)
     end
@@ -163,7 +163,7 @@ class RunnerTest < Minitest::Test
       assert_match('AlphaRunner', error.message)
       assert_match('BetaRunner', error.message)
       assert_match('Specify one explicitly', error.message)
-      assert_match('--auto-constant', error.message)
+      assert_match('--auto-target', error.message)
     ensure
       Object.send(:remove_const, :AlphaRunner) if Object.const_defined?(:AlphaRunner)
       Object.send(:remove_const, :BetaRunner) if Object.const_defined?(:BetaRunner)

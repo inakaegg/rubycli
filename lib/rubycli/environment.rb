@@ -28,7 +28,8 @@ module Rubycli
     end
 
     def constant_resolution_mode
-      value = fetch_env_value('RUBYCLI_AUTO_CONSTANT', 'strict')
+      value = fetch_env_value('RUBYCLI_AUTO_TARGET', nil)
+      value = fetch_env_value('RUBYCLI_AUTO_CONSTANT', 'strict') if value.nil? || value.empty?
       return :auto if %w[auto on true yes 1].include?(value)
 
       :strict

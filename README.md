@@ -160,10 +160,12 @@ Rubycli assumes that the file name (CamelCased) matches the class or module you 
 
 | Mode | How to enable | Behaviour |
 | --- | --- | --- |
-| `strict` (default) | do nothing / `--strict-constant` / `RUBYCLI_AUTO_CONSTANT=strict` | Fails unless the CamelCase name matches. The error lists the detected constants and gives explicit rerun instructions. |
-| `auto` | `--auto-constant` or `RUBYCLI_AUTO_CONSTANT=auto` | If exactly one constant in that file defines CLI-callable methods, Rubycli auto-selects it; otherwise you still get the friendly error message. |
+| `strict` (default) | do nothing / `--strict-target` / `RUBYCLI_AUTO_TARGET=strict` | Fails unless the CamelCase name matches. The error lists the detected constants and gives explicit rerun instructions. |
+| `auto` | `--auto-target` (aliases: `--auto-constant`) or `RUBYCLI_AUTO_TARGET=auto` | If exactly one constant in that file defines CLI-callable methods, Rubycli auto-selects it; otherwise you still get the friendly error message. |
 
 This keeps large projects safe by default but still provides a one-flag escape hatch when you prefer the fully automatic behaviour.
+
+> **Instance-only classes** – If a class only defines public *instance* methods (for example, it exposes functionality via `attr_reader` or `def greet` on the instance), you must run Rubycli with `--new` so the class is instantiated before commands are resolved. Otherwise Rubycli cannot see any CLI-callable methods. Add at least one public class method when you do not want to rely on `--new`.
 
 ## Project Philosophy
 

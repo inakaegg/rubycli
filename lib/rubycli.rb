@@ -440,7 +440,7 @@ module Rubycli
         lines << "This file defines #{candidate.name}, but its name does not match #{command_target}."
         lines << 'Re-run by specifying the constant explicitly:'
         lines << "  rubycli #{command_target} #{candidate.name} ..."
-        lines << 'Alternatively pass --auto-constant (or RUBYCLI_AUTO_CONSTANT=auto) to auto-select it.'
+        lines << 'Alternatively pass --auto-target (or RUBYCLI_AUTO_TARGET=auto) to auto-select it.'
         return lines.join("\n")
       end
 
@@ -450,7 +450,7 @@ module Rubycli
         lines << "  - #{candidate.name}: #{candidate.summary}#{hint}"
       end
       lines << "Specify one explicitly, e.g. rubycli #{command_target} MyRunner"
-      lines << 'Or pass --auto-constant to allow Rubycli to auto-select a single candidate.'
+      lines << 'Or pass --auto-target to allow Rubycli to auto-select a single candidate.'
       lines.join("\n")
     end
 

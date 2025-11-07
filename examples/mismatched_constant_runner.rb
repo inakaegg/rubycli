@@ -3,7 +3,7 @@
 # Demonstrates a file whose constant does not match the file name. By default
 # Rubycli will ask you to call out the constant explicitly:
 #   rubycli examples/mismatched_constant_runner.rb FriendlyGreeter greet --message "Hello"
-# To auto-select it, pass --auto-constant.
+# To auto-select it, pass --auto-target (or set RUBYCLI_AUTO_TARGET=auto).
 class FriendlyGreeter
   # NAME [String] Text to display
   # --message MESSAGE [String] Greeting to print (defaults to "Hello")
