@@ -1,5 +1,6 @@
-require 'psych'
 require_relative 'type_utils'
+require_relative 'arguments/token_stream'
+require_relative 'arguments/value_converter'
 
 module Rubycli
   class ArgumentParser
@@ -10,6 +11,7 @@ module Rubycli
       @documentation_registry = documentation_registry
       @json_coercer = json_coercer
       @debug_logger = debug_logger
+      @value_converter = Arguments::ValueConverter.new
     end
 
     def parse(args, method = nil)
@@ -25,21 +27,21 @@ module Rubycli
       option_lookup = build_option_lookup(option_defs)
       type_converters = build_type_converter_map(option_defs)
 
-      i = 0
-      while i < args.size
-        token = args[i]
+      stream = Arguments::TokenStream.new(args)
+
+      until stream.finished?
+        token = stream.current
 
         if token == '--'
-          rest_tokens = (args[(i + 1)..-1] || []).map { |value| convert_arg(value) }
+          stream.advance
+          rest_tokens = stream.consume_remaining.map { |value| convert_arg(value) }
           pos_args.concat(rest_tokens)
           break
-        end
-
-        if option_token?(token)
-          i = process_option_token(
+        elsif option_token?(token)
+          stream.advance
+          process_option_token(
             token,
-            args,
-            i,
+            stream,
             kw_param_names,
             kw_args,
             cli_aliases,
@@ -47,12 +49,12 @@ module Rubycli
             type_converters
           )
         elsif assignment_token?(token)
+          stream.advance
           process_assignment_token(token, kw_args)
         else
           pos_args << convert_arg(token)
+          stream.advance
         end
-
-        i += 1
       end
 
       debug_log "Final parsed - pos_args: #{pos_args.inspect}, kw_args: #{kw_args.inspect}"
@@ -85,8 +87,7 @@ module Rubycli
 
     def process_option_token(
       token,
-      args,
-      current_index,
+      stream,
       kw_param_names,
       kw_args,
       cli_aliases,
@@ -108,21 +109,19 @@ module Rubycli
       requires_value = option_meta ? option_meta[:requires_value] : nil
       option_label = option_meta&.long || "--#{final_key.tr('_', '-')}"
 
-      value_capture, current_index = if embedded_value
-                                       [embedded_value, current_index]
-                                     elsif option_meta
-                                       capture_option_value(
-                                         option_meta,
-                                         args,
-                                         current_index,
-                                         requires_value
-                                       )
-                                     elsif current_index + 1 < args.size && !looks_like_option?(args[current_index + 1])
-                                       current_index += 1
-                                       [args[current_index], current_index]
-                                     else
-                                       ['true', current_index]
-                                     end
+      value_capture = if embedded_value
+                        embedded_value
+                      elsif option_meta
+                        capture_option_value(
+                          option_meta,
+                          stream,
+                          requires_value
+                        )
+                      elsif (next_token = stream.current) && !looks_like_option?(next_token)
+                        stream.consume
+                      else
+                        'true'
+                      end
 
       if requires_value && (value_capture.nil? || value_capture == 'true')
         raise ArgumentError, "Option '#{option_label}' requires a value"
@@ -136,40 +135,30 @@ module Rubycli
       )
 
       kw_args[final_key_sym] = converted_value
-      current_index
     end
+    def capture_option_value(option_meta, stream, requires_value)
+      if option_meta[:boolean_flag]
+        if (next_token = stream.current) && TypeUtils.boolean_string?(next_token)
+          return stream.consume
+        end
+        return 'true'
+      elsif option_meta[:optional_value]
+        if (next_token = stream.current) && !looks_like_option?(next_token)
+          return stream.consume
+        end
+        return true
+      elsif requires_value == false
+        return 'true'
+      elsif requires_value
+        next_token = stream.current
+        raise ArgumentError, "Option '#{option_meta.long}' requires a value" unless next_token
 
-    def capture_option_value(option_meta, args, current_index, requires_value)
-      new_index = current_index
-      value = if option_meta[:boolean_flag]
-                if new_index + 1 < args.size && TypeUtils.boolean_string?(args[new_index + 1])
-                  new_index += 1
-                  args[new_index]
-                else
-                  'true'
-                end
-              elsif option_meta[:optional_value]
-                if new_index + 1 < args.size && !looks_like_option?(args[new_index + 1])
-                  new_index += 1
-                  args[new_index]
-                else
-                  true
-                end
-              elsif requires_value == false
-                'true'
-              elsif requires_value
-                if new_index + 1 >= args.size
-                  raise ArgumentError, "Option '#{option_meta.long}' requires a value"
-                end
-                new_index += 1
-                args[new_index]
-              elsif new_index + 1 < args.size && !looks_like_option?(args[new_index + 1])
-                new_index += 1
-                args[new_index]
-              else
-                'true'
-              end
-      [value, new_index]
+        return stream.consume
+      elsif (next_token = stream.current) && !looks_like_option?(next_token)
+        return stream.consume
+      else
+        return 'true'
+      end
     end
 
     def process_assignment_token(token, kw_args)
@@ -204,65 +193,7 @@ module Rubycli
     end
 
     def convert_arg(arg)
-      return arg if Rubycli.eval_mode? || Rubycli.json_mode?
-      return arg unless arg.is_a?(String)
-
-      trimmed = arg.strip
-      return arg if trimmed.empty?
-
-      if literal_like?(trimmed)
-        literal = try_literal_parse(arg)
-        return literal unless literal.equal?(LITERAL_PARSE_FAILURE)
-      end
-
-      return nil if null_literal?(trimmed)
-
-      lower = trimmed.downcase
-      return true if lower == 'true'
-      return false if lower == 'false'
-      return arg.to_i if integer_string?(trimmed)
-      return arg.to_f if float_string?(trimmed)
-
-      arg
-    end
-
-    def integer_string?(str)
-      str =~ /\A-?\d+\z/
-    end
-
-    def float_string?(str)
-      str =~ /\A-?\d+\.\d+\z/
-    end
-
-    LITERAL_PARSE_FAILURE = Object.new
-
-    def try_literal_parse(value)
-      return LITERAL_PARSE_FAILURE unless value.is_a?(String)
-
-      trimmed = value.strip
-      return value if trimmed.empty?
-
-      literal = Psych.safe_load(trimmed, aliases: false)
-      return literal unless literal.nil? && !null_literal?(trimmed)
-
-      LITERAL_PARSE_FAILURE
-    rescue Psych::SyntaxError, Psych::DisallowedClass, Psych::Exception
-      LITERAL_PARSE_FAILURE
-    end
-
-    def null_literal?(value)
-      return false unless value
-
-      %w[null ~].include?(value.downcase)
-    end
-
-    def literal_like?(value)
-      return false unless value
-      return true if value.start_with?('[', '{', '"', "'")
-      return true if value.start_with?('---')
-      return true if value.match?(/\A(?:true|false|null|nil)\z/i)
-
-      false
+      @value_converter.convert(arg)
     end
 
 
