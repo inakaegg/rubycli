@@ -14,6 +14,7 @@ require_relative 'rubycli/json_coercer'
 require_relative 'rubycli/eval_coercer'
 require_relative 'rubycli/arguments/token_stream'
 require_relative 'rubycli/arguments/value_converter'
+require_relative 'rubycli/argument_mode_controller'
 require_relative 'rubycli/argument_parser'
 require_relative 'rubycli/help_renderer'
 require_relative 'rubycli/result_emitter'
@@ -40,6 +41,13 @@ module Rubycli
 
     def eval_coercer
       @eval_coercer ||= EvalCoercer.new
+    end
+
+    def argument_mode_controller
+      @argument_mode_controller ||= ArgumentModeController.new(
+        json_coercer: json_coercer,
+        eval_coercer: eval_coercer
+      )
     end
 
     def argument_parser
@@ -108,15 +116,11 @@ module Rubycli
     end
 
     def json_mode?
-      json_coercer.json_mode?
+      argument_mode_controller.json_mode?
     end
 
     def with_json_mode(enabled = true)
-      if enabled && eval_mode?
-        raise Rubycli::ArgumentError, '--json-args and --eval-args cannot be used together'
-      end
-
-      json_coercer.with_json_mode(enabled) { yield }
+      argument_mode_controller.with_json_mode(enabled) { yield }
     end
 
     def coerce_json_value(value)
@@ -124,15 +128,11 @@ module Rubycli
     end
 
     def eval_mode?
-      eval_coercer.eval_mode?
+      argument_mode_controller.eval_mode?
     end
 
     def with_eval_mode(enabled = true)
-      if enabled && json_mode?
-        raise Rubycli::ArgumentError, '--json-args and --eval-args cannot be used together'
-      end
-
-      eval_coercer.with_eval_mode(enabled) { yield }
+      argument_mode_controller.with_eval_mode(enabled) { yield }
     end
 
     def coerce_eval_value(value)
@@ -140,25 +140,7 @@ module Rubycli
     end
 
     def apply_argument_coercions(pos_args, kw_args)
-      if json_mode? && eval_mode?
-        raise Rubycli::ArgumentError, '--json-args and --eval-args cannot be used together'
-      end
-
-      if json_mode?
-        pos_args.map! { |value| coerce_json_value(value) }
-        kw_args.keys.each do |key|
-          kw_args[key] = coerce_json_value(kw_args[key])
-        end
-      end
-
-      return unless eval_mode?
-
-      pos_args.map! { |value| coerce_eval_value(value) }
-      kw_args.keys.each do |key|
-        kw_args[key] = coerce_eval_value(kw_args[key])
-      end
-    rescue ArgumentError => e
-      raise Rubycli::ArgumentError, e.message
+      argument_mode_controller.apply_argument_coercions(pos_args, kw_args)
     end
 
     def apply_json_coercion(pos_args, kw_args)
