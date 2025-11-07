@@ -20,6 +20,7 @@ require_relative 'rubycli/help_renderer'
 require_relative 'rubycli/result_emitter'
 require_relative 'rubycli/cli'
 require_relative 'rubycli/command_line'
+require_relative 'rubycli/constant_capture'
 
 module Rubycli
   class Error < StandardError; end
@@ -65,6 +66,10 @@ module Rubycli
 
     def result_emitter
       @result_emitter ||= ResultEmitter.new(environment: environment)
+    end
+
+    def constant_capture
+      @constant_capture ||= ConstantCapture.new
     end
 
     def cli
@@ -173,9 +178,10 @@ module Rubycli
       end
 
       full_path = find_target_path(target_path)
-      load full_path
+      capture = Rubycli.constant_capture
+      capture.capture(full_path) { load full_path }
       $PROGRAM_NAME = File.basename(full_path)
-      defined_constants = constants_defined_in_file(full_path)
+      defined_constants = capture.constants_for(full_path)
 
       constant_name = class_name || infer_class_name(full_path)
       target = constantize(
@@ -288,90 +294,11 @@ module Rubycli
     end
 
     def detect_constant_for_file(path, base_const)
-      full_path = File.expand_path(path)
-      candidates = runtime_constant_candidates(full_path, base_const)
-      candidates.find { |name| constant_defined?(name) }
-    end
+      candidates = Rubycli.constant_capture.constants_for(path)
+      return nil if candidates.empty?
 
-    def constants_defined_in_file(path)
-      return [] unless Module.method_defined?(:const_source_location)
-
-      normalized = File.expand_path(path)
-      ObjectSpace.each_object(Module).each_with_object([]) do |mod, memo|
-        mod_name = module_name_for(mod)
-        next if mod_name.nil?
-
-        safe_module_constants(mod).each do |const_name|
-          location = safe_const_source_location(mod, const_name)
-          next unless location && location[0]
-          next unless File.expand_path(location[0]) == normalized
-
-          memo << qualified_constant_name(mod_name, const_name.to_s)
-        end
-      end.uniq.sort_by { |name| [name.count('::'), name] }
-    end
-
-    def runtime_constant_candidates(full_path, base_const)
-      return [] unless Module.method_defined?(:const_source_location)
-
-      normalized = File.expand_path(full_path)
-      ObjectSpace.each_object(Module).each_with_object([]) do |mod, memo|
-        mod_name = module_name_for(mod)
-        next unless mod_name
-        next unless safe_const_defined?(mod, base_const)
-
-        location = safe_const_source_location(mod, base_const)
-        next unless location && File.expand_path(location[0]) == normalized
-
-        memo << qualified_constant_name(mod_name, base_const)
-      end.uniq.sort_by { |name| [-name.count('::'), name] }
-    end
-
-    def module_name_for(mod)
-      return '' if mod.equal?(Object)
-
-      name = mod.name
-      return nil if name.nil? || name.start_with?('#<')
-
-      name
-    end
-
-    def qualified_constant_name(mod_name, base_const)
-      mod_name.empty? ? base_const : "#{mod_name}::#{base_const}"
-    end
-
-    def safe_module_constants(mod)
-      mod.constants(false)
-    rescue NameError
-      []
-    end
-
-    def safe_const_defined?(mod, const_name)
-      mod.const_defined?(const_name, false)
-    rescue NameError
-      false
-    end
-
-    def safe_const_source_location(mod, const_name)
-      return nil unless mod.respond_to?(:const_source_location)
-
-      mod.const_source_location(const_name, false)
-    rescue NameError
-      nil
-    end
-
-    def constant_defined?(name)
-      parts = name.split('::').reject(&:empty?)
-      context = Object
-
-      parts.each do |const_name|
-        return false unless context.const_defined?(const_name, false)
-
-        context = context.const_get(const_name)
-      end
-      true
-    rescue NameError
-      false
+      direct_match = candidates.find { |name| name.split('::').last == base_const }
+      direct_match || candidates.first
     end
 
     def build_missing_constant_message(name, defined_constants, full_path)
