@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.1.3] - 2025-11-08
+
+### Added
+- TracePoint-backed constant capture so Rubycli can detect CLI classes/modules even when they are defined indirectly; bundled example and tests illustrate the behavior.
+- Strict/auto constant selection modes with the new `--auto-target` / `-a` flag so single callable constants are picked automatically when requested.
+- `--eval-lax` / `-E` argument mode that evaluates Ruby inputs but gracefully falls back to raw strings on parse failures.
+
+### Changed
+- Argument parsing internals were modularized so JSON/eval coercion now flows through a dedicated controller, simplifying future extensions.
+- `rubycli` now returns explicit status codes for success and failure, improving scriptability.
+- CLI constant selection errors provide clearer guidance, document the `--new` behavior, and consistently refer to the `--auto-target` flag.
+
+### Documentation
+- Clarified the authoritative source for documentation comments, reorganized helper logic in the showcase example, and expanded guidance around constant modes.
+
+### Fixed
+- CLI no longer dumps a Ruby backtrace when `Rubycli::Runner` reports user-facing errors; only the curated guidance is shown.
+
 ## [0.1.2] - 2025-11-06
 
 ### Added
