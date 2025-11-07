@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.4] - 2025-11-08
+
+### Changed
+- Re-cut the release that was briefly published as 0.1.3 (and yanked) so RubyGems now hosts the complete set of changes listed below.
+
+> _Note:_ 0.1.3 was yanked before general availability; consumers should upgrade directly to 0.1.4.
+
 ## [0.1.3] - 2025-11-08
 
 ### Added
