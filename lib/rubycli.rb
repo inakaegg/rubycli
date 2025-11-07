@@ -434,12 +434,23 @@ module Rubycli
 
     def build_ambiguous_constant_details(candidates, path)
       command_target = File.basename(path)
+      if candidates.size == 1
+        candidate = candidates.first
+        lines = []
+        lines << "This file defines #{candidate.name}, but its name does not match #{command_target}."
+        lines << 'Re-run by specifying the constant explicitly:'
+        lines << "  rubycli #{command_target} #{candidate.name} ..."
+        lines << 'Alternatively pass --auto-constant (or RUBYCLI_AUTO_CONSTANT=auto) to auto-select it.'
+        return lines.join("\n")
+      end
+
       lines = ['Multiple CLI-capable constants were found in this file:']
       candidates.each do |candidate|
         hint = candidate.instance_only? ? ' (instance methods only; use --new)' : ''
         lines << "  - #{candidate.name}: #{candidate.summary}#{hint}"
       end
       lines << "Specify one explicitly, e.g. rubycli #{command_target} MyRunner"
+      lines << 'Or pass --auto-constant to allow Rubycli to auto-select a single candidate.'
       lines.join("\n")
     end
 

@@ -154,6 +154,17 @@ ruby examples/hello_app_with_require.rb greet Hanako --shout
 #=> HELLO, HANAKO!
 ```
 
+## Constant resolution modes
+
+Rubycli assumes that the file name (CamelCased) matches the class or module you want to expose. When that is not the case you can choose how eagerly Rubycli should pick a constant:
+
+| Mode | How to enable | Behaviour |
+| --- | --- | --- |
+| `strict` (default) | do nothing / `--strict-constant` / `RUBYCLI_AUTO_CONSTANT=strict` | Fails unless the CamelCase name matches. The error lists the detected constants and gives explicit rerun instructions. |
+| `auto` | `--auto-constant` or `RUBYCLI_AUTO_CONSTANT=auto` | If exactly one constant in that file defines CLI-callable methods, Rubycli auto-selects it; otherwise you still get the friendly error message. |
+
+This keeps large projects safe by default but still provides a one-flag escape hatch when you prefer the fully automatic behaviour.
+
 ## Project Philosophy
 
 - **Convenience first** – The goal is to wrap existing Ruby scripts in a CLI with almost no manual plumbing. Fidelity with Python Fire is not a requirement.

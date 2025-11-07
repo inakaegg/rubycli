@@ -79,31 +79,6 @@ class RunnerTest < Minitest::Test
     assert_match(/Failed to evaluate pre-script/, error.message)
   end
 
-  def test_error_lists_candidates_when_multiple_callable_constants_exist
-    Dir.mktmpdir do |dir|
-      file = File.join(dir, 'multi_runner.rb')
-      File.write(file, <<~RUBY)
-        class AlphaRunner
-          def self.run; end
-        end
-
-        class BetaRunner
-          def self.run; end
-        end
-      RUBY
-
-      error = assert_raises(Rubycli::Runner::Error) do
-        Rubycli::Runner.execute(file, nil, [], constant_mode: :strict)
-      end
-      assert_match('AlphaRunner', error.message)
-      assert_match('BetaRunner', error.message)
-      assert_match('Specify one explicitly', error.message)
-    ensure
-      Object.send(:remove_const, :AlphaRunner) if Object.const_defined?(:AlphaRunner)
-      Object.send(:remove_const, :BetaRunner) if Object.const_defined?(:BetaRunner)
-    end
-  end
-end
   def test_strict_mode_requires_explicit_constant_when_names_differ
     Dir.mktmpdir do |dir|
       file = File.join(dir, 'cli_entry.rb')
@@ -117,7 +92,8 @@ end
         Rubycli::Runner.execute(file, nil, [], constant_mode: :strict)
       end
       assert_match('TracePointCapturedRunner', error.message)
-      assert_match('Specify one explicitly', error.message)
+      assert_match('specifying the constant explicitly', error.message)
+      assert_match('--auto-constant', error.message)
     ensure
       Object.send(:remove_const, :TracePointCapturedRunner) if Object.const_defined?(:TracePointCapturedRunner)
     end
@@ -136,7 +112,7 @@ end
         Rubycli::Runner.execute(file, nil, [], constant_mode: :strict)
       end
       assert_match('LonelyRunner', error.message)
-      assert_match('public class or instance method', error.message)
+      assert_match('--new', error.message)
     ensure
       Object.send(:remove_const, :LonelyRunner) if Object.const_defined?(:LonelyRunner)
     end
@@ -167,3 +143,30 @@ end
       Object.send(:remove_const, :InstanceRunner) if Object.const_defined?(:InstanceRunner)
     end
   end
+
+  def test_error_lists_candidates_when_multiple_callable_constants_exist
+    Dir.mktmpdir do |dir|
+      file = File.join(dir, 'multi_runner.rb')
+      File.write(file, <<~RUBY)
+        class AlphaRunner
+          def self.run; end
+        end
+
+        class BetaRunner
+          def self.run; end
+        end
+      RUBY
+
+      error = assert_raises(Rubycli::Runner::Error) do
+        Rubycli::Runner.execute(file, nil, [], constant_mode: :strict)
+      end
+      assert_match('AlphaRunner', error.message)
+      assert_match('BetaRunner', error.message)
+      assert_match('Specify one explicitly', error.message)
+      assert_match('--auto-constant', error.message)
+    ensure
+      Object.send(:remove_const, :AlphaRunner) if Object.const_defined?(:AlphaRunner)
+      Object.send(:remove_const, :BetaRunner) if Object.const_defined?(:BetaRunner)
+    end
+  end
+end
