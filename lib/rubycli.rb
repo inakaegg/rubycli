@@ -139,8 +139,12 @@ module Rubycli
       argument_mode_controller.eval_mode?
     end
 
-    def with_eval_mode(enabled = true)
-      argument_mode_controller.with_eval_mode(enabled) { yield }
+    def eval_lax_mode?
+      eval_coercer.eval_lax_mode?
+    end
+
+    def with_eval_mode(enabled = true, **options)
+      argument_mode_controller.with_eval_mode(enabled, **options) { yield }
     end
 
     def coerce_eval_value(value)
@@ -207,13 +211,14 @@ module Rubycli
       new: false,
       json: false,
       eval_args: false,
+      eval_lax: false,
       pre_scripts: [],
       constant_mode: nil
     )
       raise ArgumentError, 'target_path must be specified' if target_path.nil? || target_path.empty?
       original_program_name = $PROGRAM_NAME
       if json && eval_args
-        raise Error, '--json-args and --eval-args cannot be used together'
+        raise Error, '--json-args cannot be combined with --eval-args or --eval-lax'
       end
 
       full_path = find_target_path(target_path)
@@ -244,7 +249,7 @@ module Rubycli
 
       original_argv = ARGV.dup
       ARGV.replace(Array(cli_args).dup)
-      run_with_modes(runner_target, json: json, eval_args: eval_args)
+      run_with_modes(runner_target, json: json, eval_args: eval_args, eval_lax: eval_lax)
     ensure
       $PROGRAM_NAME = original_program_name if original_program_name
       ARGV.replace(original_argv) if original_argv
@@ -325,13 +330,13 @@ module Rubycli
       raise Error, "Failed to instantiate target: #{e.message}"
     end
 
-    def run_with_modes(target, json:, eval_args:)
+    def run_with_modes(target, json:, eval_args:, eval_lax:)
       runner = proc { Rubycli.run(target) }
 
       if json
         Rubycli.with_json_mode(true, &runner)
       elsif eval_args
-        Rubycli.with_eval_mode(true, &runner)
+        Rubycli.with_eval_mode(true, lax: eval_lax, &runner)
       else
         runner.call
       end

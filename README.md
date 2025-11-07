@@ -395,7 +395,9 @@ rubycli -e scripts/data_cli.rb DataCLI run '(1..10).to_a'
 
 Under the hood Rubycli evaluates each argument inside an isolated binding (`Object.new.instance_eval { binding }`). Treat this as unsafe input: do not enable it for untrusted callers. The mode can also be toggled programmatically via `Rubycli.with_eval_mode(true) { … }`.
 
-`--eval-args`/`-e` and `--json-args`/`-j` are mutually exclusive; Rubycli will raise an error if both are present. Both modes augment the default literal parsing, so you can pick either strict JSON or full Ruby evaluation when the defaults are not enough.
+Need Ruby evaluation plus a safety net? Pass `--eval-lax` (or `-E`). It flips on eval mode just like `--eval-args`, but if Ruby fails to parse a token (for example, a bare `https://example.com`), Rubycli emits a warning and forwards the original string unchanged. This lets you mix inline math (`60*60*24*14`) with literal values without constantly juggling quotes.
+
+`--json-args`/`-j` cannot be combined with either `--eval-args`/`-e` or `--eval-lax`/`-E`; Rubycli will raise an error if both are present. Both modes augment the default literal parsing, so you can pick either strict JSON or one of the Ruby eval variants when the defaults are not enough.
 
 ## Pre-script bootstrap
 

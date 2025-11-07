@@ -21,9 +21,9 @@ module Rubycli
       @json_coercer.with_json_mode(enabled, &block)
     end
 
-    def with_eval_mode(enabled = true, &block)
+    def with_eval_mode(enabled = true, **options, &block)
       enforce_mutual_exclusion!(:eval, enabled)
-      @eval_coercer.with_eval_mode(enabled, &block)
+      @eval_coercer.with_eval_mode(enabled, **options, &block)
     end
 
     def apply_argument_coercions(positional_args, keyword_args)
@@ -47,15 +47,15 @@ module Rubycli
 
       case mode
       when :json
-        raise Rubycli::ArgumentError, '--json-args and --eval-args cannot be used together' if eval_mode?
+        raise Rubycli::ArgumentError, '--json-args cannot be combined with --eval-args or --eval-lax' if eval_mode?
       when :eval
-        raise Rubycli::ArgumentError, '--json-args and --eval-args cannot be used together' if json_mode?
+        raise Rubycli::ArgumentError, '--json-args cannot be combined with --eval-args or --eval-lax' if json_mode?
       end
     end
 
     def ensure_modes_compatible!
       if json_mode? && eval_mode?
-        raise Rubycli::ArgumentError, '--json-args and --eval-args cannot be used together'
+        raise Rubycli::ArgumentError, '--json-args cannot be combined with --eval-args or --eval-lax'
       end
     end
 

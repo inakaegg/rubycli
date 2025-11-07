@@ -41,6 +41,38 @@ class ModeCoercionTest < Minitest::Test
     assert_equal({}, kw_args)
   end
 
+  def test_eval_lax_mode_falls_back_to_original_string_on_syntax_error
+    pos_args = ['https://example.com/']
+    kw_args = { ttl: '60*60*2' }
+
+    Rubycli.with_eval_mode(true, lax: true) do
+      _, err = capture_io do
+        Rubycli.apply_argument_coercions(pos_args, kw_args)
+      end
+
+      assert_match(/Failed to evaluate argument/, err)
+    end
+
+    assert_equal(['https://example.com/'], pos_args)
+    assert_equal({ ttl: 7200 }, kw_args)
+    refute Rubycli.eval_mode?
+    refute Rubycli.eval_lax_mode?
+  end
+
+  def test_eval_lax_mode_handles_name_error_inputs
+    pos_args = ['https://example.com']
+    kw_args = {}
+
+    Rubycli.with_eval_mode(true, lax: true) do
+      capture_io do
+        Rubycli.apply_argument_coercions(pos_args, kw_args)
+      end
+    end
+
+    assert_equal(['https://example.com'], pos_args)
+    assert_equal({}, kw_args)
+  end
+
   def test_json_mode_handles_simple_string_values
     pos_args = ['"a"']
     kw_args = {}
@@ -75,7 +107,7 @@ class ModeCoercionTest < Minitest::Test
           Rubycli.apply_argument_coercions(pos_args, kw_args)
         end
       end
-      assert_match(/cannot be used together/, error.message)
+      assert_match(/cannot be combined/, error.message)
     end
   end
 

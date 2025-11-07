@@ -4,17 +4,17 @@
 # By default Rubycli will prefer the constant whose name matches the file
 # (MultiConstantRunner). To invoke HelperRunner instead, specify it explicitly:
 #   rubycli examples/multi_constant_runner.rb HelperRunner inspect
-class MultiConstantRunner
-  # TEXT [String] Message to display
-  def self.echo(text = 'hello')
-    puts(text)
-    text
+class HelperRunner
+  def self.inspect
+    puts("Helper invoked")
+    :helper
   end
 end
 
-class HelperRunner
-  def self.inspect
-    puts('Helper invoked')
-    :helper
+class MultiConstantRunner
+  # TEXT [String] Message to display
+  def self.echo(text = "hello")
+    puts(text)
+    text
   end
 end

@@ -52,6 +52,7 @@ class CommandLineTest < Minitest::Test
     assert_equal true, captured[:options][:new]
     assert_equal true, captured[:options][:json]
     assert_equal false, captured[:options][:eval_args]
+    assert_equal false, captured[:options][:eval_lax]
     assert_equal(
       [{ value: 'instance.new', context: '(inline --pre-script)' }],
       captured[:options][:pre_scripts]
@@ -74,7 +75,7 @@ class CommandLineTest < Minitest::Test
 
       assert_equal 1, status
       assert_equal '', out
-      assert_includes err, '--json-args and --eval-args cannot be used at the same time'
+      assert_includes err, '--json-args cannot be combined with --eval-args or --eval-lax'
     end
   end
 
@@ -112,6 +113,44 @@ class CommandLineTest < Minitest::Test
     refute_nil captured
     assert_equal false, captured[:opts][:json]
     assert_equal true, captured[:opts][:eval_args]
+    assert_equal false, captured[:opts][:eval_lax]
+  end
+
+  def test_accepts_eval_lax_flag
+    argv = [
+      '--eval-lax',
+      'test/fixtures/doc_examples.rb',
+      'DocExamples::TaggedSamples'
+    ]
+
+    captured = nil
+    Rubycli::Runner.stub(:execute, ->(*args, **opts) { captured = { args: args, opts: opts } }) do
+      status = Rubycli::CommandLine.run(argv)
+      assert_equal 0, status
+    end
+
+    refute_nil captured
+    assert_equal false, captured[:opts][:json]
+    assert_equal true, captured[:opts][:eval_args]
+    assert_equal true, captured[:opts][:eval_lax]
+  end
+
+  def test_accepts_short_flag_for_eval_lax_mode
+    argv = [
+      '-E',
+      'test/fixtures/doc_examples.rb',
+      'DocExamples::TaggedSamples'
+    ]
+
+    captured = nil
+    Rubycli::Runner.stub(:execute, ->(*args, **opts) { captured = { args: args, opts: opts } }) do
+      status = Rubycli::CommandLine.run(argv)
+      assert_equal 0, status
+    end
+
+    refute_nil captured
+    assert_equal true, captured[:opts][:eval_args]
+    assert_equal true, captured[:opts][:eval_lax]
   end
 
   def test_pre_script_allows_space_separated_value

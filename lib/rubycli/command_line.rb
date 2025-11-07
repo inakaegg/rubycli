@@ -3,7 +3,7 @@
 module Rubycli
   module CommandLine
     USAGE = <<~USAGE
-      Usage: rubycli [--new|-n] [--pre-script=<src>] [--json-args|-j | --eval-args|-e] <target-path> [<class-or-module>] [-- <cli-args>...]
+      Usage: rubycli [--new|-n] [--pre-script=<src>] [--json-args|-j | --eval-args|-e | --eval-lax|-E] <target-path> [<class-or-module>] [-- <cli-args>...]
 
       Examples:
         rubycli scripts/sample_runner.rb echo --message hello
@@ -15,8 +15,9 @@ module Rubycli
         --pre-script=<src>   Evaluate Ruby code and use its result as the exposed target (--init alias; also accepts space-separated form)
         --json-args, -j      Parse all following arguments strictly as JSON (no YAML literals)
         --eval-args, -e      Evaluate following arguments as Ruby code
+        --eval-lax, -E       Evaluate as Ruby but fall back to raw strings when parsing fails
         --auto-target, -a    Auto-select the only callable constant when names don't match
-        (Note: --json-args and --eval-args are mutually exclusive)
+        (Note: --json-args cannot be combined with --eval-args or --eval-lax)
         (Note: Every option that accepts a value understands both --flag=value and --flag value forms.)
 
       When <class-or-module> is omitted, Rubycli infers it from the file name in CamelCase.
@@ -39,6 +40,7 @@ module Rubycli
       new_flag = false
       json_mode = false
       eval_mode = false
+      eval_lax_mode = false
       constant_mode = nil
       pre_script_sources = []
 
@@ -73,7 +75,11 @@ module Rubycli
         when '--eval-args', '-e'
           eval_mode = true
           args.shift
-       when '--print-result'
+        when '--eval-lax', '-E'
+          eval_mode = true
+          eval_lax_mode = true
+          args.shift
+        when '--print-result'
          args.shift
         when '--auto-target', '-a'
           constant_mode = :auto
@@ -100,7 +106,7 @@ module Rubycli
       args.shift if args.first == '--'
 
       if json_mode && eval_mode
-        warn '--json-args and --eval-args cannot be used at the same time'
+        warn '--json-args cannot be combined with --eval-args or --eval-lax'
         return 1
       end
 
@@ -111,6 +117,7 @@ module Rubycli
         new: new_flag,
         json: json_mode,
         eval_args: eval_mode,
+        eval_lax: eval_lax_mode,
         pre_scripts: pre_script_sources,
         constant_mode: constant_mode
       )
