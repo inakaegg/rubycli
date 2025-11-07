@@ -161,7 +161,7 @@ Rubycli assumes that the file name (CamelCased) matches the class or module you 
 | Mode | How to enable | Behaviour |
 | --- | --- | --- |
 | `strict` (default) | do nothing / `--strict-target` / `RUBYCLI_AUTO_TARGET=strict` | Fails unless the CamelCase name matches. The error lists the detected constants and gives explicit rerun instructions. |
-| `auto` | `--auto-target` (aliases: `--auto-constant`) or `RUBYCLI_AUTO_TARGET=auto` | If exactly one constant in that file defines CLI-callable methods, Rubycli auto-selects it; otherwise you still get the friendly error message. |
+| `auto` | `--auto-target` or `RUBYCLI_AUTO_TARGET=auto` | If exactly one constant in that file defines CLI-callable methods, Rubycli auto-selects it; otherwise you still get the friendly error message. |
 
 This keeps large projects safe by default but still provides a one-flag escape hatch when you prefer the fully automatic behaviour.
 

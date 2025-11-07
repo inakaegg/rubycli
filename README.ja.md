@@ -154,7 +154,7 @@ Rubycli は「ファイル名を CamelCase にした定数」を公開対象だ�
 | モード | 有効化方法 | 挙動 |
 | --- | --- | --- |
 | `strict`（デフォルト） | 何もしない / `--strict-target` / `RUBYCLI_AUTO_TARGET=strict` | CamelCase が一致しないとエラーになります。検出した定数一覧と再実行コマンド例を表示します。 |
-| `auto` | `--auto-target`（互換の `--auto-constant`）または `RUBYCLI_AUTO_TARGET=auto` | ファイル内で CLI として実行できる定数が 1 つだけなら自動選択します。複数あれば従来通りエラーで案内します。 |
+| `auto` | `--auto-target` または `RUBYCLI_AUTO_TARGET=auto` | ファイル内で CLI として実行できる定数が 1 つだけなら自動選択します。複数あれば従来通りエラーで案内します。 |
 
 大規模なコードベースでも安全側を保ちながら、どうしても自動選択したいときだけ 1 フラグで切り替えられます。
 

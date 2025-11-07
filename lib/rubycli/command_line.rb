@@ -76,10 +76,10 @@ module Rubycli
           args.shift
         when '--print-result'
           args.shift
-        when '--auto-target', '--auto-constant'
+        when '--auto-target'
           constant_mode = :auto
           args.shift
-        when '--strict-target', '--strict-constant'
+        when '--strict-target'
           constant_mode = :strict
           args.shift
         when '--'
