@@ -126,6 +126,9 @@ module Rubycli
     rescue Rubycli::Runner::PreScriptError => e
       warn e.message
       1
+    rescue Rubycli::Runner::Error => e
+      warn e.message
+      1
     end
   end
 end
