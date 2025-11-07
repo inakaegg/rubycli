@@ -93,26 +93,18 @@ module DocumentationStyleShowcase
     build_payload(:yard_min, subject, count, prefix, tags, quiet)
   end
 
-  def build_payload(style, subject, count, prefix, tags, quiet)
-    {
-      style: style,
-      subject: subject,
-      count: count,
-      prefix: prefix,
-      tags: tags,
-      quiet: quiet,
-    }
-  end
-end
+  class << self
+    private
 
-module DocumentationStyleShowcase
-  module_function :canonical,
-                  :canonical_min,
-                  :angled,
-                  :angled_min,
-                  :typed,
-                  :typed_min,
-                  :yard,
-                  :yard_min
-  private :build_payload
+    def build_payload(style, subject, count, prefix, tags, quiet)
+      {
+        style: style,
+        subject: subject,
+        count: count,
+        prefix: prefix,
+        tags: tags,
+        quiet: quiet,
+      }
+    end
+  end
 end
