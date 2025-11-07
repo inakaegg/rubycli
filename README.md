@@ -2,7 +2,7 @@
 
 ![Rubycli logo](assets/rubycli-logo.png)
 
-Rubycli turns existing Ruby classes and modules into CLIs by reading their documentation comments. It is inspired by [Python Fire](https://github.com/google/python-fire) but is not a drop-in port or an official project; the focus here is Ruby’s documentation conventions and type annotations.
+Rubycli turns existing Ruby classes and modules into CLIs by inspecting their public method definitions and the doc comments attached to those methods. It is inspired by [Python Fire](https://github.com/google/python-fire) but is not a drop-in port or an official project; the focus here is Ruby’s documentation conventions and type annotations, and those annotations can actively change how a CLI argument is coerced (for example, `TAG... [String[]]` forces array parsing).
 
 > 🇯🇵 Japanese documentation is available in [README.ja.md](README.ja.md).
 
@@ -158,7 +158,7 @@ ruby examples/hello_app_with_require.rb greet Hanako --shout
 
 - **Convenience first** – The goal is to wrap existing Ruby scripts in a CLI with almost no manual plumbing. Fidelity with Python Fire is not a requirement.
 - **Inspired, not a port** – We borrow ideas from Python Fire, but we do not aim for feature parity. Missing Fire features are generally “by design.”
-- **Comments enrich, code decides** – Method signatures remain the source of truth; optional documentation comments add richer help output and can surface warnings when you opt into strict mode (`RUBYCLI_STRICT=ON`).
+- **Method definitions first, comments augment behavior** – Public method signatures determine what gets exposed (and which arguments are required), while doc comments like `TAG...` or `[Integer]` can turn the very same CLI value into arrays, integers, booleans, etc. Enable strict mode (`RUBYCLI_STRICT=ON`) when you want warnings about mismatches.
 - **Lightweight maintenance** – Much of the implementation was generated with AI assistance; contributions that diverge into deep Ruby metaprogramming are out of scope. Please discuss expectations before opening parity PRs.
 
 ## Features
@@ -179,7 +179,7 @@ ruby examples/hello_app_with_require.rb greet Hanako --shout
 | Capability | Python Fire | Rubycli |
 | ---------- | ----------- | -------- |
 | Attribute traversal | Recursively exposes attributes/properties on demand | Exposes public methods defined on the target; no implicit traversal |
-| Constructor handling | Automatically prompts for `__init__` args when instantiating classes | Requires explicit `--new` plus comment docs; no automatic prompting |
+| Constructor handling | Automatically prompts for `__init__` args when instantiating classes | `--new` simply instantiates without passing CLI args (use pre-scripts or your own factories if you need injected dependencies) |
 | Interactive shell | Offers Fire-specific REPL when invoked without command | No interactive shell mode; strictly command execution |
 | Input discovery | Pure reflection, no doc comments required | Doc comments drive option names, placeholders, and validation |
 | Data structures | Dictionaries / lists become subcommands by default | Focused on class or module methods; no automatic dict/list expansion |
