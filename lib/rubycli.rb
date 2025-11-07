@@ -160,6 +160,44 @@ module Rubycli
     class Error < Rubycli::Error; end
     class PreScriptError < Error; end
 
+    ConstantCandidate = Struct.new(
+      :name,
+      :constant,
+      :class_methods,
+      :instance_methods,
+      keyword_init: true
+    ) do
+      def callable?(instantiate: false)
+        return true if class_methods.any?
+
+        instantiate && instance_methods.any?
+      end
+
+      def matches?(base_name)
+        name.split('::').last == base_name
+      end
+
+      def instance_only?
+        instance_methods.any? && class_methods.empty?
+      end
+
+      def summary
+        parts = []
+        parts << "class: #{format_methods(class_methods)}" if class_methods.any?
+        parts << "instance: #{format_methods(instance_methods)}" if instance_methods.any?
+        parts << 'no CLI methods' if parts.empty?
+        parts.join(' | ')
+      end
+
+      private
+
+      def format_methods(methods)
+        list = methods.first(3).map(&:to_s)
+        list << '...' if methods.size > 3
+        list.join(', ')
+      end
+    end
+
     module_function
 
     def execute(
@@ -169,7 +207,8 @@ module Rubycli
       new: false,
       json: false,
       eval_args: false,
-      pre_scripts: []
+      pre_scripts: [],
+      constant_mode: nil
     )
       raise ArgumentError, 'target_path must be specified' if target_path.nil? || target_path.empty?
       original_program_name = $PROGRAM_NAME
@@ -181,14 +220,25 @@ module Rubycli
       capture = Rubycli.constant_capture
       capture.capture(full_path) { load full_path }
       $PROGRAM_NAME = File.basename(full_path)
-      defined_constants = capture.constants_for(full_path)
+      constant_mode ||= Rubycli.environment.constant_resolution_mode
+      candidates = build_constant_candidates(full_path, capture.constants_for(full_path))
+      defined_constants = candidates.map(&:name)
 
-      constant_name = class_name || infer_class_name(full_path)
-      target = constantize(
-        constant_name,
-        defined_constants: defined_constants,
-        full_path: full_path
-      )
+      target = if class_name
+                 constantize(
+                   class_name,
+                   defined_constants: defined_constants,
+                   full_path: full_path
+                 )
+               else
+                 select_constant_candidate(
+                   full_path,
+                   camelize(File.basename(full_path, '.rb')),
+                   candidates,
+                   constant_mode,
+                   instantiate: new
+                 )
+               end
       runner_target = new ? instantiate_target(target) : target
       runner_target = apply_pre_scripts(pre_scripts, target, runner_target)
 
@@ -244,12 +294,6 @@ module Rubycli
       end
     end
 
-    def infer_class_name(path)
-      base = File.basename(path, '.rb')
-      base_const = camelize(base)
-      detect_constant_for_file(path, base_const) || base_const
-    end
-
     def camelize(name)
       name.split(/[^a-zA-Z0-9]+/).reject(&:empty?).map { |part|
         part[0].upcase + part[1..].downcase
@@ -293,15 +337,117 @@ module Rubycli
       end
     end
 
-    def detect_constant_for_file(path, base_const)
-      candidates = Rubycli.constant_capture.constants_for(path)
-      return nil if candidates.empty?
+    def build_constant_candidates(path, constant_names)
+      normalized = normalize_path(path)
+      Array(constant_names).each_with_object([]) do |const_name, memo|
+        constant = safe_constant_lookup(const_name)
+        next unless constant.is_a?(Module)
 
-      direct_match = candidates.find { |name| name.split('::').last == base_const }
-      direct_match || candidates.first
+        class_methods = collect_defined_methods(constant.singleton_class, normalized)
+        instance_methods = collect_defined_methods(constant, normalized)
+
+        memo << ConstantCandidate.new(
+          name: const_name,
+          constant: constant,
+          class_methods: class_methods,
+          instance_methods: instance_methods
+        )
+      end
     end
 
-    def build_missing_constant_message(name, defined_constants, full_path)
+    def collect_defined_methods(owner, normalized_path)
+      owner.public_instance_methods(false).each_with_object([]) do |method_name, memo|
+        method_object = owner.instance_method(method_name)
+        location = method_object.source_location
+        next unless location && normalize_path(location[0]) == normalized_path
+
+        memo << method_name
+      end
+    rescue TypeError
+      []
+    end
+
+    def safe_constant_lookup(name)
+      parts = name.split('::').reject(&:empty?)
+      context = Object
+
+      parts.each do |const_name|
+        return nil unless context.const_defined?(const_name, false)
+
+        context = context.const_get(const_name)
+      end
+
+      context
+    rescue NameError
+      nil
+    end
+
+    def select_constant_candidate(path, base_const, candidates, constant_mode, instantiate: false)
+      if candidates.empty?
+        raise Error, build_missing_constant_message(
+          base_const,
+          [],
+          path,
+          details: 'Rubycli could not detect any constants in this file.'
+        )
+      end
+
+      matching = candidates.find { |candidate| candidate.matches?(base_const) }
+      if matching
+        return matching.constant if matching.callable?(instantiate: instantiate)
+
+        detail = if matching.instance_only?
+                   "#{matching.name} only defines instance methods in this file. Run with --new to instantiate before invoking CLI commands."
+                 else
+                   "#{matching.name} does not define any CLI-callable methods in this file. Add a public class or instance method defined in this file."
+                 end
+        raise Error, build_missing_constant_message(
+          base_const,
+          candidates.map(&:name),
+          path,
+          details: detail
+        )
+      end
+
+      callable = candidates.select { |candidate| candidate.callable?(instantiate: instantiate) }
+      if callable.empty?
+        raise Error, build_missing_constant_message(
+          base_const,
+          candidates.map(&:name),
+          path,
+          details: 'Rubycli detected constants in this file, but none define CLI-callable methods. Add a public class or instance method defined in this file.'
+        )
+      end
+
+      if constant_mode == :auto && callable.size == 1
+        return callable.first.constant
+      end
+
+      details = build_ambiguous_constant_details(callable, path)
+      raise Error, build_missing_constant_message(
+        base_const,
+        candidates.map(&:name),
+        path,
+        details: details
+      )
+    end
+
+    def build_ambiguous_constant_details(candidates, path)
+      command_target = File.basename(path)
+      lines = ['Multiple CLI-capable constants were found in this file:']
+      candidates.each do |candidate|
+        hint = candidate.instance_only? ? ' (instance methods only; use --new)' : ''
+        lines << "  - #{candidate.name}: #{candidate.summary}#{hint}"
+      end
+      lines << "Specify one explicitly, e.g. rubycli #{command_target} MyRunner"
+      lines.join("\n")
+    end
+
+    def normalize_path(path)
+      File.expand_path(path.to_s)
+    end
+
+    def build_missing_constant_message(name, defined_constants, full_path, details: nil)
       lines = ["Could not find definition: #{name}"]
       lines << "  Loaded file: #{File.expand_path(full_path)}" if full_path
 
@@ -312,6 +458,8 @@ module Rubycli
       else
         lines << "  Rubycli could not detect any publicly exposable constants in this file."
       end
+
+      lines << "  #{details}" if details
 
       lines << "  Ensure the CLASS_OR_MODULE argument is correct when invoking the CLI."
       lines.join("\n")

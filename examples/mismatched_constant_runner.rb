@@ -1,8 +1,9 @@
 # frozen_string_literal: true
 
-# Demonstrates that Rubycli::Runner can locate constants whose names do not
-# match the file name. Run with:
-#   rubycli examples/mismatched_constant_runner.rb greet --message "Hello"
+# Demonstrates a file whose constant does not match the file name. By default
+# Rubycli will ask you to call out the constant explicitly:
+#   rubycli examples/mismatched_constant_runner.rb FriendlyGreeter greet --message "Hello"
+# To auto-select it, pass --auto-constant.
 class FriendlyGreeter
   # NAME [String] Text to display
   # --message MESSAGE [String] Greeting to print (defaults to "Hello")

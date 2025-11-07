@@ -24,7 +24,14 @@ module Rubycli
 
     def allow_param_comments?
       value = fetch_env_value('RUBYCLI_ALLOW_PARAM_COMMENT', 'ON')
-      %w[on 1 true].include?(value.downcase)
+      %w[on 1 true].include?(value)
+    end
+
+    def constant_resolution_mode
+      value = fetch_env_value('RUBYCLI_AUTO_CONSTANT', 'strict')
+      return :auto if %w[auto on true yes 1].include?(value)
+
+      :strict
     end
 
     def handle_documentation_issue(message, file: nil, line: nil)
