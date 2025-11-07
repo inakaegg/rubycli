@@ -32,6 +32,26 @@ class RunnerTest < Minitest::Test
     end
   end
 
+  def test_infers_constant_using_capture_when_name_differs_from_file
+    Dir.mktmpdir do |dir|
+      file = File.join(dir, 'cli_entry.rb')
+      File.write(file, <<~RUBY)
+        class TracePointCapturedRunner
+          def self.run; end
+        end
+      RUBY
+
+      captured_target = nil
+      Rubycli.stub(:run, ->(target, *_args) { captured_target = target }) do
+        Rubycli::Runner.execute(file, nil, [])
+      end
+
+      assert_equal TracePointCapturedRunner, captured_target
+    ensure
+      Object.send(:remove_const, :TracePointCapturedRunner) if Object.const_defined?(:TracePointCapturedRunner)
+    end
+  end
+
   def test_apply_pre_scripts_transforms_target
     target = Class.new do
       def call
