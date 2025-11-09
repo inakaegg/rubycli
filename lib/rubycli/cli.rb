@@ -49,7 +49,7 @@ module Rubycli
         execute_method(entry.method, command, args, cli_mode)
       end
     rescue Rubycli::ArgumentError => e
-      warn e.message
+      warn "[ERROR] #{e.message}"
       1
     end
 

@@ -1,3 +1,5 @@
+require 'did_you_mean'
+
 require_relative 'type_utils'
 require_relative 'arguments/token_stream'
 require_relative 'arguments/value_converter'
@@ -242,10 +244,26 @@ module Rubycli
         next if literal_allowed?(definition.allowed_values, entry)
         next if type_allowed?(definition.types, entry)
 
-        description = allowed_value_description(definition)
-        message = "Value #{entry.inspect} for #{label} is not allowed#{description ? ": #{description}" : ''}"
+        message = build_invalid_value_message(definition, entry, label)
         @environment.handle_input_violation(message)
       end
+    end
+
+    def build_invalid_value_message(definition, entry, label)
+      description = allowed_value_description(definition)
+      formatted_value = format_literal_value(entry)
+
+      message = if description
+        "#{label} must be #{description} (received #{formatted_value})"
+      else
+        "Value #{formatted_value} for #{label} is not allowed"
+      end
+
+      suggestions = literal_suggestions(definition, entry)
+      return message if suggestions.empty?
+
+      suggestion_text = suggestions.size == 1 ? suggestions.first : suggestions.join(', ')
+      "#{message}. Did you mean #{suggestion_text}?"
     end
 
     def literal_allowed?(allowed_entries, value)
@@ -283,11 +301,39 @@ module Rubycli
 
     def allowed_value_description(definition)
       literal_descriptions = Array(definition.allowed_values).map { |entry| format_literal_value(entry[:value]) }.reject(&:empty?)
-      type_descriptions = Array(definition.types).map(&:to_s).reject { |token| literal_hint_token?(token) }
+      type_descriptions = Array(definition.types)
+                          .map { |token| token.to_s.strip }
+                          .reject { |token| token.empty? || literal_hint_token?(token) }
       combined = (literal_descriptions + type_descriptions).uniq.reject(&:empty?)
       return nil if combined.empty?
 
-      "allowed values are #{combined.join(', ')}"
+      return combined.first if combined.size == 1
+
+      "one of #{combined.join(', ')}"
+    end
+
+    def literal_suggestions(definition, entry)
+      literals = Array(definition.allowed_values).map { |allowed| allowed[:value] }.compact
+      return [] if literals.empty?
+      return [] unless entry.is_a?(String) || entry.is_a?(Symbol)
+
+      candidates = literals.select { |value| value.is_a?(String) || value.is_a?(Symbol) }
+      return [] if candidates.empty?
+
+      lookup = {}
+      dictionary = candidates.each_with_object([]) do |candidate, memo|
+        key = candidate.to_s
+        lookup[key] ||= candidate
+        memo << key unless memo.include?(key)
+      end
+
+      spell_checker = DidYouMean::SpellChecker.new(dictionary: dictionary)
+      matches = spell_checker.correct(entry.to_s)
+      return [] if matches.empty?
+
+      matches.take(3).map { |match| format_literal_value(lookup[match]) }
+    rescue LoadError, NameError
+      []
     end
 
     def matches_type_token?(token, value)
