@@ -158,13 +158,13 @@ Rubycli は「ファイル名を CamelCase にした定数」を公開対象だ�
 
 大規模なコードベースでも安全側を保ちながら、どうしても自動選択したいときだけ 1 フラグで切り替えられます。
 
-> **インスタンスメソッド専用のクラスについて** – 公開メソッドがインスタンス側（`attr_reader` や `def greet`）にしか無い場合は、`--new` を付けて事前にインスタンス化しないと CLI から呼び出せません。クラスメソッドを 1 つ用意するか、`--new` を明示して実行してください。
+> **インスタンスメソッド専用のクラスについて** – 公開メソッドがインスタンス側（`def greet` など）にしか無い場合は、`--new` を付けて事前にインスタンス化しないと CLI から呼び出せません。クラスメソッドを 1 つ用意するか、`--new` を明示して実行してください。
 
 ## 開発方針
 
 - **便利さが最優先** – 既存の Ruby スクリプトを最小の手間で CLI 化できることを目的にしており、Python Fire の完全移植は目指していません。
 - **インスパイアであってポートではない** – アイデアの出自は Fire ですが、同等機能を揃える予定は基本的にありません。Fire 由来の未実装機能は仕様です。
-- **メソッド定義が土台、コメントが挙動を補強** – 公開メソッドのシグネチャが CLI に露出する範囲と必須／任意を決めますが、コメントに `TAG...` や `[Integer]` を書くと同じ引数でも配列化や型変換が行われます。コメントと実装のズレを観測したいときだけ `RUBYCLI_STRICT=ON` で厳格モードを有効化し、警告を受け取ります。
+- **メソッド定義が土台、コメントが挙動を補強** – 公開メソッドのシグネチャが CLI に露出する範囲と必須／任意を決めますが、コメントに `TAG...` や `[Integer]` を書くと同じ引数でも配列化や型変換が行われます。さらに Rubycli は `--names='["Alice","Bob"]'` のような JSON/YAML らしい入力を自動的に安全なリテラルとして評価します。`rubycli --check パス/対象.rb` でコメントと実装のズレを検査しつつ、通常実行時に `--strict` を付ければドキュメント通りでない入力をその場でエラーにできます。
 - **軽量メンテナンス** – 実装の多くは AI 支援で作られており、深い Ruby メタプログラミングを伴う大規模拡張は想定外です。Fire 互換を求める PR は事前相談をお願いします。
 
 ## 特徴
@@ -173,13 +173,13 @@ Rubycli は「ファイル名を CamelCase にした定数」を公開対象だ�
 - YARD 形式と `NAME [Type] 説明…` の簡潔記法を同時サポート
 - 引数はデフォルトで安全なリテラルとして解釈し、必要に応じて厳格 JSON モードや Ruby eval モードを切り替え可能
 - `--pre-script`（エイリアス: `--init`）で任意の Ruby コードを評価し、その結果オブジェクトを公開
-- `RUBYCLI_STRICT=ON` で有効化できる厳格モードにより、コメントとシグネチャの矛盾を警告として検知可能
+- `--check` でコメント整合性を lint、`--strict` で入力値をドキュメント通りに強制する二段構えのガード
 
 ## Python Fire との違い
 
 - **コメント対応のヘルプ生成**: コメントがあればヘルプに反映しつつ、最終的な判断は常にライブなメソッド定義に基づきます。
 - **型に基づく解析**: `NAME [String]` や YARD タグから型を推論し、真偽値・配列・数値などを自動変換します。
-- **厳密な整合性チェック**: 厳格モードを有効にすれば、コメントとメソッド定義が食い違う際に警告を出して保守性を高められます。
+- **厳密な整合性チェック**: `rubycli --check` でコメントと実装のズレを実行前に検査し、通常実行時に `--strict` を付ければドキュメントで宣言した型・許可値以外の入力を拒否できます。
 - **Ruby 向け拡張**: キーワード引数やブロック (`@yield*`) といった Ruby 固有の構文に合わせたパーサや `RUBYCLI_*` 環境変数を用意しています。
 
 | 機能 | Python Fire | Rubycli |
@@ -294,6 +294,48 @@ README のサンプルは既定スタイルとして大文字プレースホル�
 - `--name ARG1` のようにオプションへプレースホルダだけを指定しても同じく `String` が推論されます。
 - `--verbose` のように値プレースホルダを省略したオプションは Boolean フラグとして扱われます。
 
+### リテラル列挙による制約
+
+`--format MODE [:json, :yaml, :auto]` や `LEVEL [:info, :warn]` のように型注釈内へ許容リテラルを列挙すると、ヘルプに選択肢を表示しつつ Rubycli が入力制約として解釈します。シンボル・文字列（裸の単語も可）・真偽値・数値・`nil` に対応し、型ヒントと混在させて `--channel TARGET [:stdout, :stderr, Boolean]` のような宣言も書けます。`%i[info warn]` / `%w[debug info]` などの短縮記法も展開されるため、`LEVEL %i[info warn]` でも同じ効果になります。通常実行では許可外の入力に警告を表示して続行し、`--strict` を付けた場合は `Rubycli::ArgumentError` を送出して即座に停止します。
+
+> シンボルと文字列は厳密に区別されます。`[:info, :warn]` と書いた場合は `:info` のようにコロン付きで入力してください。`["info", "warn"]` を選んだ場合はプレーンな文字列のみ受け付けます。
+
+```bash
+# literal choice デモ (examples/strict_choices_demo.rb)
+ruby examples/strict_choices_demo.rb report warn --format json
+#=> [WARN] format=json
+
+# --strict を付けると仕様外の値で即エラー
+ruby -Ilib exe/rubycli --strict examples/strict_choices_demo.rb report debug
+#=> Rubycli::ArgumentError: Value "debug" for LEVEL is not allowed: allowed values are :info, :warn, :error
+```
+
+```bash
+# シンボル入力はコロンを付ける
+ruby -Ilib exe/rubycli --strict examples/strict_choices_demo.rb report :warn
+#=> [WARN] format=text
+
+ruby -Ilib exe/rubycli --strict examples/strict_choices_demo.rb report warn
+#=> Rubycli::ArgumentError: Value "warn" for LEVEL is not allowed: allowed values are :info, :warn, :error
+```
+
+### 標準ライブラリ型ヒント
+
+コメントに `Date` や `Time`, `BigDecimal`, `Pathname` など標準ライブラリの型名を書けば、Rubycli が必要な `require` を行った上で CLI 引数をその型へ変換します。
+
+```bash
+# examples/typed_arguments_demo.rb より
+ruby examples/typed_arguments_demo.rb ingest \
+  --date 2024-12-25 \
+  --moment 2024-12-25T10:00:00Z \
+  --budget 123.45 \
+  --input ./data/input.csv
+```
+
+ハンドラ側には `Date` / `Time` / `BigDecimal` / `Pathname` のインスタンスがそのまま渡るため、追加のパース処理は不要です。
+
+各オプションには既定値があるため、`ruby examples/typed_arguments_demo.rb ingest --budget 999.99` のように個別の型だけ試すこともできます。
+
 `@example` や `@raise`, `@see`, `@deprecated` などその他の YARD タグは、現状ヘルプ出力には反映されません。
 
 > すべての記法をまとめて試したい場合は `rubycli examples/documentation_style_showcase.rb canonical --help` や `... angled --help` などを実行してみてください。
@@ -350,7 +392,7 @@ Options:
   --notify         [Boolean]  optional  (default: false)
 ```
 
-`AMOUNT` だけがドキュメント化されていますが、`factor` や `clamp`, `notify` も自動的に補完され、既定値や型が推論されていることがわかります。コメントとシグネチャの矛盾を早期に検知したい場合は `RUBYCLI_STRICT=ON` で厳格モードを有効化してください。
+`AMOUNT` だけがドキュメント化されていますが、`factor` や `clamp`, `notify` も自動的に補完され、既定値や型が推論されていることがわかります。開発時は `rubycli --check 対象.rb` でコメントとシグネチャの矛盾を検出し、本番実行で `--strict` を付ければ仕様外の入力をその場で弾けます。
 
 #### 存在しない引数やオプションをコメントに書いた場合
 
@@ -428,7 +470,8 @@ rubycli --pre-script scripts/bootstrap_runner.rb \
 | 変数 / フラグ | 説明 | 既定値 |
 | ------------- | ---- | ------ |
 | `--debug` / `RUBYCLI_DEBUG=true` | デバッグログ表示 | `false` |
-| `RUBYCLI_STRICT=ON` | 厳格モードを有効化（コメントとシグネチャの矛盾を警告） | `OFF` |
+| `--check` | コメント／実装のズレを検査し、コマンドは実行しない | `off` |
+| `--strict` | ドキュメントで許可した型・値以外をエラーとして拒否 | `off` |
 | `RUBYCLI_ALLOW_PARAM_COMMENT=OFF` | レガシーな `@param` 記法を無効化（互換性のため既定では ON） | `ON` |
 
 ## Rubycli API

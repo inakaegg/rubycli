@@ -152,10 +152,10 @@ module Rubycli
     end
 
     def render_positionals(positionals_in_order)
-      rows = positionals_in_order.map do |info|
+        rows = positionals_in_order.map do |info|
         definition = info[:definition]
         label = info[:label]
-        type = formatted_types(definition&.types)
+        type = type_display(definition)
         requirement = positional_requirement(info[:kind])
         description_parts = []
         description_parts << info[:description] if info[:description]
@@ -169,7 +169,7 @@ module Rubycli
     def render_options(options, required_keywords)
       rows = options.map do |opt|
         label = option_flag_with_placeholder(opt)
-        type = formatted_types(opt.types)
+        type = type_display(opt)
         requirement = required_keywords.include?(opt.keyword) ? 'required' : 'optional'
         description_parts = []
         description_parts << opt.description if opt.description
@@ -198,10 +198,53 @@ module Rubycli
     end
 
     def formatted_types(types)
-      type_list = Array(types).compact.map(&:to_s).reject(&:empty?).uniq
+      type_list = Array(types).compact.map { |token| token.to_s.strip }.reject(&:empty?)
+      type_list = type_list.each_with_object([]) do |token, acc|
+        acc << token unless acc.include?(token)
+      end
       return '' if type_list.empty?
 
-      "[#{type_list.join(', ')}]"
+      nil_tokens, rest = type_list.partition { |token| token.casecmp('nil').zero? }
+      ordered = rest + nil_tokens
+      "[#{ordered.join(', ')}]"
+    end
+
+    def type_display(definition)
+      return formatted_types(definition&.types) unless definition
+
+      literal_entries = Array(definition.allowed_values).map { |entry| format_allowed_value(entry[:value]) }
+      type_tokens = Array(definition.types).map { |token| token.to_s.strip }.reject(&:empty?)
+      type_tokens.reject! { |token| literal_token?(token) }
+
+      combined = (literal_entries + type_tokens).uniq
+      return formatted_types(definition.types) if combined.empty?
+
+      "[#{combined.join(', ')}]"
+    end
+
+    def format_allowed_value(value)
+      case value
+      when Symbol
+        ":#{value}"
+      when String
+        %("#{value}")
+      when Integer, Float
+        value.to_s
+      when TrueClass, FalseClass
+        value.to_s
+      when NilClass
+        'nil'
+      else
+        value.inspect
+      end
+    end
+
+    def literal_token?(token)
+      return true if token.start_with?('%')
+      return true if token.include?('[')
+      return true if token.start_with?(':')
+
+      false
     end
 
     def positional_requirement(kind)
@@ -268,19 +311,25 @@ module Rubycli
     end
 
     def required_placeholder(placeholder, definition, name)
-      return placeholder.strip unless placeholder.nil? || placeholder.strip.empty?
+      unless placeholder.nil? || placeholder.strip.empty? || auto_generated_placeholder?(placeholder, definition, name)
+        return placeholder.strip
+      end
 
       default_positional_label(definition, name, uppercase: true)
     end
 
     def optional_placeholder(placeholder, definition, name)
-      return placeholder.strip unless placeholder.nil? || placeholder.strip.empty?
+      unless placeholder.nil? || placeholder.strip.empty? || auto_generated_placeholder?(placeholder, definition, name)
+        return placeholder.strip
+      end
 
       "[#{default_positional_label(definition, name, uppercase: true)}]"
     end
 
     def rest_placeholder(placeholder, definition, name)
-      return placeholder.strip unless placeholder.nil? || placeholder.strip.empty?
+      unless placeholder.nil? || placeholder.strip.empty? || auto_generated_placeholder?(placeholder, definition, name)
+        return placeholder.strip
+      end
 
       base = default_positional_label(definition, name, uppercase: true)
       "[#{base}...]"
@@ -318,6 +367,13 @@ module Rubycli
 
       first_non_nil_type = opt.types&.find { |type| !nil_type?(type) && !boolean_type?(type) }
       first_non_nil_type
+    end
+
+    def auto_generated_placeholder?(placeholder, definition, name)
+      return false unless definition
+      return false unless definition.respond_to?(:doc_format) && definition.doc_format == :auto_generated
+
+      placeholder.strip.casecmp(name.to_s).zero?
     end
 
     def ensure_angle_bracket_placeholder(placeholder)

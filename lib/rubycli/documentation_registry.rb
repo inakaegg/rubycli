@@ -20,7 +20,7 @@ module Rubycli
       location = method_obj.source_location
       return empty_metadata unless location
 
-      cache_key = [location[0], location[1], @environment.strict_mode?, @environment.allow_param_comments?]
+      cache_key = [location[0], location[1], @environment.doc_check_mode?, @environment.allow_param_comments?]
       return deep_dup(@metadata_cache[cache_key]) if @metadata_cache.key?(cache_key)
 
       comment_lines = @comment_extractor.extract(location[0], location[1])

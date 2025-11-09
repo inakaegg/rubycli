@@ -122,7 +122,7 @@ module Rubycli
             file: source_file,
             line: line_number
           )
-          return nil if @environment.strict_mode?
+          return nil if @environment.doc_check_mode?
         end
 
         pattern = /\A@param\s+([a-zA-Z0-9_]+)(?:\s+\[([^\]]+)\])?(?:\s+\(([^)]+)\))?(?:\s+(.*))?\z/
@@ -135,7 +135,8 @@ module Rubycli
         description = match[4]&.strip
         description = nil if description&.empty?
 
-        types = parse_type_annotation(type_str)
+        raw_types = parse_type_annotation(type_str)
+        types, allowed_values = partition_type_tokens(raw_types)
 
         long_option = nil
         short_option = nil
@@ -180,7 +181,12 @@ module Rubycli
 
         long_option ||= "--#{param_name.tr('_', '-')}"
 
-        types = parse_type_annotation(type_token) if (types.nil? || types.empty?) && type_token
+        if (types.nil? || types.empty?) && type_token
+          inline_raw_types = parse_type_annotation(type_token)
+          inline_types, inline_allowed = partition_type_tokens(inline_raw_types)
+          types = inline_types
+          allowed_values = merge_allowed_values(allowed_values, inline_allowed)
+        end
 
         option_def = build_option_definition(
           param_name.to_sym,
@@ -190,7 +196,8 @@ module Rubycli
           types,
           description,
           inline_type_annotation: !type_token.nil?,
-          doc_format: :tagged_param
+          doc_format: :tagged_param,
+          allowed_values: allowed_values
         )
 
         param_symbol = param_name.to_sym
@@ -204,7 +211,8 @@ module Rubycli
             types: option_def.types,
             description: option_def.description,
             param_name: param_symbol,
-            doc_format: option_def.doc_format
+            doc_format: option_def.doc_format,
+            allowed_values: option_def.allowed_values
           )
         elsif role == :keyword
           return option_def
@@ -218,7 +226,8 @@ module Rubycli
             types: option_def.types,
             description: option_def.description,
             param_name: param_symbol,
-            doc_format: option_def.doc_format
+            doc_format: option_def.doc_format,
+            allowed_values: option_def.allowed_values
           )
         end
 
@@ -291,7 +300,8 @@ module Rubycli
 
         description = description_tokens.join(' ').strip
         description = nil if description.empty?
-        types = parse_type_annotation(type_token)
+        raw_types = parse_type_annotation(type_token)
+        types, allowed_values = partition_type_tokens(raw_types)
 
         keyword = long_option.delete_prefix('--').tr('-', '_').to_sym
         return nil unless method_accepts_keyword?(method_obj, keyword)
@@ -304,7 +314,8 @@ module Rubycli
           types,
           description,
           inline_type_annotation: !type_token.nil?,
-          doc_format: :rubycli
+          doc_format: :rubycli,
+          allowed_values: allowed_values
         )
       end
 
@@ -326,7 +337,8 @@ module Rubycli
         description = tokens.join(' ').strip
         description = nil if description.empty?
 
-        types = parse_type_annotation(type_token)
+        raw_types = parse_type_annotation(type_token)
+        types, allowed_values = partition_type_tokens(raw_types)
         placeholder_info = analyze_placeholder(placeholder)
         inferred_types = infer_types_from_placeholder(
           normalize_type_list(types),
@@ -346,7 +358,8 @@ module Rubycli
           description: description,
           inline_type_annotation: inline_annotation,
           inline_type_text: inline_text,
-          doc_format: :rubycli
+          doc_format: :rubycli,
+          allowed_values: allowed_values
         )
       end
 
@@ -493,7 +506,7 @@ module Rubycli
                 file: source_file,
                 line: line_for_comment
               )
-              unless @environment.strict_mode?
+              unless @environment.doc_check_mode?
                 fallback = PositionalDefinition.new(
                   placeholder: name.to_s,
                   label: name.to_s.upcase,
@@ -502,7 +515,9 @@ module Rubycli
                   param_name: name,
                   default_value: defaults[name],
                   inline_type_annotation: false,
-                  inline_type_text: nil
+                  inline_type_text: nil,
+                  doc_format: :auto_generated,
+                  allowed_values: []
                 )
                 metadata[:positionals] << fallback
                 positional_map[name] = fallback
@@ -517,7 +532,7 @@ module Rubycli
                 file: source_file,
                 line: line_for_comment
               )
-              unless @environment.strict_mode?
+              unless @environment.doc_check_mode?
                 fallback_option = build_auto_option_definition(name)
                 ordered_options << fallback_option if fallback_option
               end
@@ -616,6 +631,98 @@ module Rubycli
         cleaned.split(/[,|]/).map { |token| normalize_type_token(token) }.reject(&:empty?)
       end
 
+      def partition_type_tokens(tokens)
+        normalized = Array(tokens).dup
+        allowed = []
+
+        normalized.each do |token|
+          expand_annotation_token(token).each do |expanded|
+            literal_entry = literal_entry_from_token(expanded)
+            allowed << literal_entry if literal_entry
+          end
+        end
+
+        [normalized, allowed.compact.uniq]
+      end
+
+      def merge_allowed_values(primary, additional)
+        return Array(additional) if primary.nil? || primary.empty?
+        return Array(primary) if additional.nil? || additional.empty?
+
+        (primary + additional).uniq
+      end
+
+      def expand_annotation_token(token)
+        return [] unless token
+
+        stripped = token.strip
+        return [] if stripped.empty?
+
+        if stripped.start_with?('%i[') && stripped.end_with?(']')
+          inner = stripped[3..-2]
+          inner.split(/\s+/).map { |entry| ":#{entry}" }
+        elsif stripped.start_with?('%I[') && stripped.end_with?(']')
+          inner = stripped[3..-2]
+          inner.split(/\s+/).map { |entry| ":#{entry}" }
+        elsif stripped.start_with?('%w[') && stripped.end_with?(']')
+          inner = stripped[3..-2]
+          inner.split(/\s+/)
+        elsif stripped.start_with?('%W[') && stripped.end_with?(']')
+          inner = stripped[3..-2]
+          inner.split(/\s+/)
+        else
+          [stripped]
+        end
+      end
+
+      def literal_entry_from_token(token)
+        return nil unless token
+
+        stripped = token.strip
+        return nil if stripped.empty?
+        stripped = stripped[1..] if stripped.start_with?('[') && !stripped.end_with?(']')
+        if stripped.end_with?(']') && !stripped.include?('[')
+          stripped = stripped[0...-1]
+        end
+
+        lowered = stripped.downcase
+        return { kind: :literal, value: nil } if %w[nil null ~].include?(lowered)
+        return { kind: :literal, value: true } if lowered == 'true'
+        return { kind: :literal, value: false } if lowered == 'false'
+
+        if stripped.start_with?(':')
+          sym_name = stripped[1..]
+          return nil if sym_name.nil? || sym_name.empty?
+
+          return { kind: :literal, value: sym_name.to_sym }
+        end
+
+        if stripped.start_with?('"') && stripped.end_with?('"') && stripped.length >= 2
+          return { kind: :literal, value: stripped[1..-2] }
+        end
+
+        if stripped.start_with?("'") && stripped.end_with?("'") && stripped.length >= 2
+          return { kind: :literal, value: stripped[1..-2] }
+        end
+
+        if stripped.match?(/\A-?\d+\z/)
+          return { kind: :literal, value: Integer(stripped) }
+        end
+
+        if stripped.match?(/\A-?\d+\.\d+\z/)
+          return { kind: :literal, value: Float(stripped) }
+        end
+
+        if stripped.match?(/\A[a-z0-9._-]+\z/)
+          return { kind: :literal, value: stripped }
+        end
+
+        nil
+      rescue ArgumentError
+        nil
+      end
+
+
       def placeholder_token?(token)
         return false unless token
 
@@ -654,9 +761,7 @@ module Rubycli
         return true if stripped.start_with?('@')
 
         parsed = parse_type_annotation(stripped)
-        return false if parsed.empty?
-
-        parsed.all? { |entry| inline_type_hint?(entry) }
+        !parsed.empty?
       end
 
       def known_type_token?(token)
@@ -723,6 +828,9 @@ module Rubycli
           elsif token.start_with?('(') && !token.include?(')')
             buffer = token.dup
             closing = ')'
+          elsif token.start_with?('%') && token.include?('[') && !token.include?(']')
+            buffer = token.dup
+            closing = ']'
           else
             combined << token
           end
@@ -755,7 +863,8 @@ module Rubycli
         types,
         description,
         inline_type_annotation: false,
-        doc_format: nil
+        doc_format: nil,
+        allowed_values: nil
       )
         normalized_long = normalize_long_option(long_option)
         normalized_short = normalize_short_option(short_option)
@@ -800,8 +909,13 @@ module Rubycli
           optional_value: optional_value,
           inline_type_annotation: inline_type_annotation,
           inline_type_text: inline_type_text,
-          doc_format: doc_format
+          doc_format: doc_format,
+          allowed_values: normalize_allowed_values(allowed_values)
         )
+      end
+
+      def normalize_allowed_values(values)
+        Array(values).compact.uniq
       end
 
       def build_auto_option_definition(keyword)
@@ -815,7 +929,8 @@ module Rubycli
           [],
           nil,
           inline_type_annotation: false,
-          doc_format: :auto_generated
+          doc_format: :auto_generated,
+          allowed_values: []
         )
       end
 
@@ -830,7 +945,8 @@ module Rubycli
           default_value: option.default_value,
           inline_type_annotation: option.inline_type_annotation,
           inline_type_text: option.inline_type_text,
-          doc_format: option.doc_format
+          doc_format: option.doc_format,
+          allowed_values: option.allowed_values
         )
       end
     end

@@ -2,6 +2,47 @@
 
 require 'test_helper'
 require_relative '../examples/documentation_style_showcase'
+require 'date'
+require 'time'
+require 'bigdecimal'
+require 'pathname'
+
+module ValidationSamples
+  module_function
+
+  # LEVEL [:info, :warn] Severity level
+  # --accept SOURCE [:official, :linked_content]
+  def check(level, accept: :official)
+    [level, accept]
+  end
+
+  # KIND %i[info warn] severity short-hand
+  def choose(kind)
+    kind
+  end
+
+  # NAME ["alpha", "beta"] string-only choices
+  def label(name)
+    name
+  end
+end
+
+module StdTypeSamples
+  module_function
+
+  # --date DATE [Date]   Planned date
+  # --moment TIME [Time] Execution timestamp
+  # --budget AMOUNT [BigDecimal] Budget amount
+  # --input FILE [Pathname] Input file
+  def ingest(date:, moment:, budget:, input:)
+    {
+      date: date,
+      moment: moment,
+      budget: budget,
+      input: input
+    }
+  end
+end
 
 class ArgumentParserTest < Minitest::Test
   def setup
@@ -139,5 +180,89 @@ class ArgumentParserTest < Minitest::Test
       assert_equal('subject', pos_args.first)
       assert_equal({ tags: '[:alpha, :beta]' }, kw_args)
     end
+  end
+
+  def test_validate_inputs_warns_when_values_outside_choices
+    method = ValidationSamples.method(:check)
+    warnings = []
+    @environment.stub(:handle_input_violation, ->(msg) { warnings << msg }) do
+      @parser.validate_inputs(method, ['invalid'], { accept: 'unknown' })
+    end
+
+    refute_empty warnings
+    assert warnings.all? { |msg| msg.include?('invalid') || msg.include?('unknown') }
+  end
+
+  def test_validate_inputs_raises_when_strict_input_enabled
+    method = ValidationSamples.method(:check)
+    @environment.enable_strict_input!
+
+    assert_raises(Rubycli::ArgumentError) do
+      @parser.validate_inputs(method, ['invalid'], { accept: 'unknown' })
+    end
+  end
+
+  def test_percent_i_literals_are_captured
+    metadata = @registry.metadata_for(ValidationSamples.method(:choose))
+    values = metadata[:positionals].first.allowed_values.map { |entry| entry[:value] }
+    assert_equal %i[info warn], values
+  end
+
+  def test_percent_i_literals_validate_input
+    method = ValidationSamples.method(:choose)
+    warnings = []
+    @environment.stub(:handle_input_violation, ->(msg) { warnings << msg }) do
+      @parser.validate_inputs(method, ['oops'], {})
+    end
+    refute_empty warnings
+    assert_includes warnings.first, 'oops'
+  end
+
+  def test_symbol_literal_accepts_symbol_input_only
+    method = ValidationSamples.method(:choose)
+    ok_args, = @parser.parse([':info'], method)
+    assert_equal [:info], ok_args
+    assert_silent { @parser.validate_inputs(method, ok_args, {}) }
+
+    warnings = []
+    @environment.stub(:handle_input_violation, ->(msg) { warnings << msg }) do
+      bad_args, = @parser.parse(['info'], method)
+      @parser.validate_inputs(method, bad_args, {})
+    end
+    refute_empty warnings
+    assert_includes warnings.first, 'info'
+    refute_includes warnings.first, '%i'
+  end
+
+  def test_string_literals_reject_symbols
+    method = ValidationSamples.method(:label)
+    ok_args, = @parser.parse(['alpha'], method)
+    assert_equal ['alpha'], ok_args
+    assert_silent { @parser.validate_inputs(method, ok_args, {}) }
+
+    warnings = []
+    @environment.stub(:handle_input_violation, ->(msg) { warnings << msg }) do
+      bad_args, = @parser.parse([':alpha'], method)
+      @parser.validate_inputs(method, bad_args, {})
+    end
+    refute_empty warnings
+    assert_includes warnings.first, ':alpha'
+  end
+
+  def test_standard_type_hints_convert_to_stdlib_classes
+    method = StdTypeSamples.method(:ingest)
+    args = [
+      '--date', '2024-12-25',
+      '--moment', '2024-12-25T10:00:00Z',
+      '--budget', '123.45',
+      '--input', '/tmp/data.txt'
+    ]
+    pos_args, kw_args = @parser.parse(args, method)
+
+    assert_empty pos_args
+    assert_instance_of Date, kw_args[:date]
+    assert_instance_of Time, kw_args[:moment]
+    assert_instance_of BigDecimal, kw_args[:budget]
+    assert_instance_of Pathname, kw_args[:input]
   end
 end

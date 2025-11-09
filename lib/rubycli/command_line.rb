@@ -3,7 +3,7 @@
 module Rubycli
   module CommandLine
     USAGE = <<~USAGE
-      Usage: rubycli [--new|-n] [--pre-script=<src>] [--json-args|-j | --eval-args|-e | --eval-lax|-E] <target-path> [<class-or-module>] [-- <cli-args>...]
+      Usage: rubycli [--new|-n] [--pre-script=<src>] [--json-args|-j | --eval-args|-e | --eval-lax|-E] [--strict] [--check] <target-path> [<class-or-module>] [-- <cli-args>...]
 
       Examples:
         rubycli scripts/sample_runner.rb echo --message hello
@@ -17,6 +17,8 @@ module Rubycli
         --eval-args, -e      Evaluate following arguments as Ruby code
         --eval-lax, -E       Evaluate as Ruby but fall back to raw strings when parsing fails
         --auto-target, -a    Auto-select the only callable constant when names don't match
+        --strict             Enforce documented input types/choices (invalid values abort)
+        --check              Validate documentation/comments without executing commands
         (Note: --json-args cannot be combined with --eval-args or --eval-lax)
         (Note: Every option that accepts a value understands both --flag=value and --flag value forms.)
 
@@ -42,6 +44,7 @@ module Rubycli
       eval_mode = false
       eval_lax_mode = false
       constant_mode = nil
+      check_mode = false
       pre_script_sources = []
 
       loop do
@@ -79,6 +82,13 @@ module Rubycli
           eval_mode = true
           eval_lax_mode = true
           args.shift
+        when '--strict'
+          Rubycli.environment.enable_strict_input!
+          args.shift
+        when '--check'
+          check_mode = true
+          Rubycli.environment.enable_doc_check!
+          args.shift
         when '--print-result'
          args.shift
         when '--auto-target', '-a'
@@ -108,6 +118,28 @@ module Rubycli
       if json_mode && eval_mode
         warn '--json-args cannot be combined with --eval-args or --eval-lax'
         return 1
+      end
+
+      if check_mode && (json_mode || eval_mode)
+        warn '--check cannot be combined with --json-args or --eval-args'
+        return 1
+      end
+
+      if check_mode && !args.empty?
+        warn '--check does not accept command arguments'
+        return 1
+      end
+
+      Rubycli.environment.clear_documentation_issues!
+
+      if check_mode
+        return Rubycli::Runner.check(
+          target_path,
+          class_or_module,
+          new: new_flag,
+          pre_scripts: pre_script_sources,
+          constant_mode: constant_mode
+        )
       end
 
       Rubycli::Runner.execute(

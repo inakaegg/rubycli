@@ -15,6 +15,11 @@ module Rubycli
         trimmed = value.strip
         return value if trimmed.empty?
 
+        if symbol_literal?(trimmed)
+          symbol_value = trimmed.delete_prefix(':')
+          return symbol_value.to_sym unless symbol_value.empty?
+        end
+
         if literal_like?(trimmed)
           literal = try_literal_parse(value)
           return literal unless literal.equal?(LITERAL_PARSE_FAILURE)
@@ -32,6 +37,12 @@ module Rubycli
       end
 
       private
+
+      def symbol_literal?(value)
+        return false unless value
+
+        value.start_with?(':') && value.length > 1 && value[1..].match?(/\A[A-Za-z_][A-Za-z0-9_]*\z/)
+      end
 
       def integer_string?(str)
         str =~ /\A-?\d+\z/

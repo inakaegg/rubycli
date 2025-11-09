@@ -61,6 +61,14 @@ module Rubycli
       [pos_args, kw_args]
     end
 
+    def validate_inputs(method_obj, positional_args, keyword_args)
+      return unless method_obj
+
+      metadata = @documentation_registry.metadata_for(method_obj)
+      validate_positional_arguments(method_obj, metadata, positional_args)
+      validate_keyword_arguments(metadata, keyword_args)
+    end
+
     private
 
     def debug_log(message)
@@ -196,6 +204,191 @@ module Rubycli
       @value_converter.convert(arg)
     end
 
+    def validate_positional_arguments(method_obj, metadata, positional_args)
+      return if positional_args.nil? || positional_args.empty?
+
+      positional_map = metadata[:positionals_map] || {}
+      ordered_params = method_obj.parameters.select { |type, _| %i[req opt].include?(type) }
+
+      ordered_params.each_with_index do |(_, name), index|
+        definition = positional_map[name]
+        next unless definition
+        next if index >= positional_args.size
+
+        label = definition.label || definition.placeholder || name.to_s.upcase
+        enforce_value_against_definition(definition, positional_args[index], label)
+      end
+    end
+
+    def validate_keyword_arguments(metadata, keyword_args)
+      return if keyword_args.nil? || keyword_args.empty?
+
+      option_lookup = build_option_lookup(metadata[:options] || [])
+      keyword_args.each do |key, value|
+        definition = option_lookup[key.to_sym]
+        next unless definition
+
+        label = definition.long || "--#{key.to_s.tr('_', '-')}"
+        enforce_value_against_definition(definition, value, label)
+      end
+    end
+
+    def enforce_value_against_definition(definition, value, label)
+      return unless definition
+
+      return if type_allowed?(definition.types, value)
+
+      Array(value.is_a?(Array) ? value : [value]).each do |entry|
+        next if literal_allowed?(definition.allowed_values, entry)
+        next if type_allowed?(definition.types, entry)
+
+        description = allowed_value_description(definition)
+        message = "Value #{entry.inspect} for #{label} is not allowed#{description ? ": #{description}" : ''}"
+        @environment.handle_input_violation(message)
+      end
+    end
+
+    def literal_allowed?(allowed_entries, value)
+      entries = Array(allowed_entries).compact
+      return false if entries.empty?
+
+      entries.any? { |entry| literal_match?(entry[:value], value) }
+    end
+
+    def literal_match?(candidate, value)
+      case candidate
+      when Symbol
+        value.is_a?(Symbol) && value == candidate
+      when String
+        value.is_a?(String) && value == candidate
+      when Integer
+        value.is_a?(Integer) && value == candidate
+      when Float
+        value.is_a?(Float) && value == candidate
+      when TrueClass, FalseClass
+        value == candidate
+      when NilClass
+        value.nil?
+      else
+        value == candidate
+      end
+    end
+
+    def type_allowed?(types, value)
+      tokens = Array(types).compact
+      return false if tokens.empty?
+
+      tokens.any? { |token| matches_type_token?(token, value) }
+    end
+
+    def allowed_value_description(definition)
+      literal_descriptions = Array(definition.allowed_values).map { |entry| format_literal_value(entry[:value]) }.reject(&:empty?)
+      type_descriptions = Array(definition.types).map(&:to_s).reject { |token| literal_hint_token?(token) }
+      combined = (literal_descriptions + type_descriptions).uniq.reject(&:empty?)
+      return nil if combined.empty?
+
+      "allowed values are #{combined.join(', ')}"
+    end
+
+    def matches_type_token?(token, value)
+      normalized = token.to_s.strip
+      return true if normalized.empty?
+
+      if (inner = array_inner_type(normalized))
+        return false unless value.is_a?(Array)
+        return value.all? { |element| matches_type_token?(inner, element) }
+      end
+
+      case normalized
+      when 'Boolean'
+        value.is_a?(TrueClass) || value.is_a?(FalseClass)
+      when 'JSON'
+        value.is_a?(Hash) || value.is_a?(Array)
+      when 'nil', 'NilClass'
+        value.nil?
+      else
+        klass = constant_for_token(normalized)
+        return value.is_a?(klass) if klass
+
+        false
+      end
+    end
+
+    def array_inner_type(token)
+      if token.end_with?('[]')
+        token[0..-3]
+      elsif token.start_with?('Array<') && token.end_with?('>')
+        token[6..-2].strip
+      else
+        nil
+      end
+    end
+
+    def nil_type_token?(token)
+      token.to_s.strip.casecmp('nil').zero? || token.to_s.strip.casecmp('NilClass').zero?
+    end
+
+    def safe_constant_lookup(name)
+      parts = name.to_s.split('::').reject(&:empty?)
+      return nil if parts.empty?
+
+      context = Object
+      parts.each do |const_name|
+        return nil unless context.const_defined?(const_name, false)
+
+        context = context.const_get(const_name)
+      end
+      context
+    rescue NameError
+      nil
+    end
+
+    def constant_for_token(token)
+      normalized = token.to_s
+      case normalized
+      when 'Fixnum'
+        return Integer
+      when 'Date', 'DateTime'
+        require 'date'
+      when 'Time'
+        require 'time'
+      when 'BigDecimal', 'Decimal'
+        require 'bigdecimal'
+      when 'Pathname'
+        require 'pathname'
+      when 'Struct'
+        return Struct
+      end
+
+      safe_constant_lookup(normalized)
+    rescue LoadError
+      safe_constant_lookup(normalized)
+    end
+
+    def format_literal_value(value)
+      case value
+      when Symbol
+        ":#{value}"
+      when String
+        value.inspect
+      when Integer, Float
+        value.to_s
+      when TrueClass, FalseClass
+        value.to_s
+      when NilClass
+        'nil'
+      else
+        value.inspect
+      end
+    end
+
+    def literal_hint_token?(token)
+      token = token.to_s.strip
+      return false if token.empty?
+
+      token.start_with?('%i[', '%I[', '%w[', '%W[')
+    end
+
 
     def build_cli_alias_map(option_defs)
       option_defs.each_with_object({}) do |opt, memo|
@@ -273,7 +466,15 @@ module Rubycli
         ->(value) { value.to_sym }
       when 'BigDecimal', 'Decimal'
         require 'bigdecimal'
-        ->(value) { BigDecimal(value) }
+        ->(value) {
+          return value if value.is_a?(BigDecimal)
+
+          if value.is_a?(String)
+            BigDecimal(value)
+          else
+            BigDecimal(value.to_s)
+          end
+        }
       when 'Date'
         require 'date'
         ->(value) { Date.parse(value) }
@@ -282,6 +483,13 @@ module Rubycli
         ->(value) { Time.parse(value) }
       when 'JSON', 'Hash'
         ->(value) { JSON.parse(value) }
+      when 'Pathname'
+        require 'pathname'
+        ->(value) {
+          return value if value.is_a?(Pathname)
+
+          Pathname.new(value.to_s)
+        }
       else
         if normalized.start_with?('Array<') && normalized.end_with?('>')
           inner = normalized[6..-2].strip

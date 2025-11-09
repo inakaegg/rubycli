@@ -2,6 +2,14 @@
 
 require 'test_helper'
 
+module HelpEnumSamples
+  module_function
+
+  # LEVEL [:info, :warn, :error] Severity
+  # --format TARGET ["text", "json"] Output channel
+  def report(level, format: 'text'); end
+end
+
 class HelpRendererTest < Minitest::Test
   def setup
     environment = Rubycli::Environment.new(env: {}, argv: [])
@@ -32,7 +40,7 @@ class HelpRendererTest < Minitest::Test
       Options:
         -g, --greeting=<GREETING>  [String]       optional  Greeting prefix (default: 'Hello')
         -s, --shout                [Boolean]      optional  Emit uppercase output (default: false)
-        --punctuation=<PUNCT>      [String, nil]  optional  Optional punctuation suffix (default: nil)
+        --punctuation=<PUNCT>      [nil, String]  optional  Optional punctuation suffix (default: nil)
 
       Return values:
         String  Finalised greeting
@@ -78,6 +86,13 @@ class HelpRendererTest < Minitest::Test
     method = DocExamples::TypeHintSamples.new.method(:analyse)
     description = @renderer.method_description(method)
     assert_equal '<file> [<pattern>] [--format=<format>] [--tags=<tag>...]', description
+  end
+
+  def test_literal_choices_render_in_help_tables
+    method = HelpEnumSamples.method(:report)
+    usage = @renderer.usage_for_method('report', method)
+    assert_includes usage, 'LEVEL  [:info, :warn, :error]'
+    assert_includes usage, '--format=<TARGET>  ["text", "json"]'
   end
 
   private

@@ -165,13 +165,13 @@ Rubycli assumes that the file name (CamelCased) matches the class or module you 
 
 This keeps large projects safe by default but still provides a one-flag escape hatch when you prefer the fully automatic behaviour.
 
-> **Instance-only classes** – If a class only defines public *instance* methods (for example, it exposes functionality via `attr_reader` or `def greet` on the instance), you must run Rubycli with `--new` so the class is instantiated before commands are resolved. Otherwise Rubycli cannot see any CLI-callable methods. Add at least one public class method when you do not want to rely on `--new`.
+> **Instance-only classes** – If a class only defines public *instance* methods (for example, it exposes functionality via `def greet` on the instance), you must run Rubycli with `--new` so the class is instantiated before commands are resolved. Otherwise Rubycli cannot see any CLI-callable methods. Add at least one public class method when you do not want to rely on `--new`.
 
 ## Project Philosophy
 
 - **Convenience first** – The goal is to wrap existing Ruby scripts in a CLI with almost no manual plumbing. Fidelity with Python Fire is not a requirement.
 - **Inspired, not a port** – We borrow ideas from Python Fire, but we do not aim for feature parity. Missing Fire features are generally “by design.”
-- **Method definitions first, comments augment behavior** – Public method signatures determine what gets exposed (and which arguments are required), while doc comments like `TAG...` or `[Integer]` can turn the very same CLI value into arrays, integers, booleans, etc. Enable strict mode (`RUBYCLI_STRICT=ON`) when you want warnings about mismatches.
+- **Method definitions first, comments augment behavior** – Public method signatures determine what gets exposed (and which arguments are required), while doc comments like `TAG...` or `[Integer]` can turn the very same CLI value into arrays, integers, booleans, etc. Rubycli also auto-parses inputs that look like JSON/YAML literals (for example `--names='["Alice","Bob"]'`) before enforcing the documented type. Run `rubycli --check path/to/script.rb` to lint documentation mismatches, and pass `--strict` during normal runs when you want invalid input to abort instead of merely warning.
 - **Lightweight maintenance** – Much of the implementation was generated with AI assistance; contributions that diverge into deep Ruby metaprogramming are out of scope. Please discuss expectations before opening parity PRs.
 
 ## Features
@@ -180,13 +180,13 @@ This keeps large projects safe by default but still provides a one-flag escape h
 - Automatic option signature inference (`NAME [Type] Description…`) without extra DSLs
 - Safe literal parsing out of the box (arrays / hashes / booleans) with opt-in strict JSON and Ruby eval modes
 - Optional pre-script hook (`--pre-script` / `--init`) to evaluate Ruby and expose the resulting object
-- Opt-in strict mode (`RUBYCLI_STRICT=ON`) that emits warnings whenever comments contradict method signatures
+- Dedicated CLI flags for quality gates: `--check` lints documentation/comments without running commands, and `--strict` treats documented types/choices as hard requirements
 
 ## How it differs from Python Fire
 
 - **Comment-aware help** – Rubycli leans on doc comments when present but still reflects the live method signature, keeping code as the ultimate authority.
 - **Type-aware parsing** – Placeholder syntax (`NAME [String]`) and YARD tags let Rubycli coerce arguments to booleans, arrays, numerics, etc. without additional code.
-- **Strict validation** – Opt-in strict mode surfaces warnings when comments fall out of sync with method signatures, helping teams keep help text accurate.
+- **Strict validation** – `rubycli --check` lint runs catch documentation drift before execution, while runtime `--strict` runs turn documented types/choices into enforceable contracts.
 - **Ruby-centric tooling** – Supports Ruby-specific conventions such as optional keyword arguments, block documentation (`@yield*` tags), and `RUBYCLI_*` environment toggles.
 
 | Capability | Python Fire | Rubycli |
@@ -303,6 +303,48 @@ Common inference rules:
 - Using that placeholder in an option line (`--name ARG1`) also infers a `String`.
 - Omitting the placeholder entirely (`--verbose`) produces a Boolean flag.
 
+### Literal choices and enums
+
+You can express a finite set of accepted values directly inside the type annotation, for example `--format MODE [:json, :yaml, :auto]` or `LEVEL [:info, :warn]`. Symbols, strings (including barewords), booleans, numbers, and `nil` are supported, and you can mix literal entries with broader types such as `--channel TARGET [:stdout, :stderr, Boolean]`. `%i[info warn]` / `%w[debug info]` short-hands expand as expected, so `LEVEL %i[info warn]` works the same as the explicit array form. Rubycli always records these choices in the generated help; when you run with `--strict`, any value outside the documented set results in `Rubycli::ArgumentError`, otherwise a warning is printed and execution proceeds.
+
+> Symbols and strings are compared strictly. `[:info, :warn]` requires symbol inputs such as `:info`, while `["info", "warn"]` only accepts plain strings. Prefix a value with `:` at the CLI to pass a symbol.
+
+```bash
+# literal choices + booleans (see examples/strict_choices_demo.rb)
+ruby examples/strict_choices_demo.rb report warn --format json
+#=> [WARN] format=json
+
+# the same command with --strict will abort when values drift
+ruby -Ilib exe/rubycli --strict examples/strict_choices_demo.rb report debug
+#=> Rubycli::ArgumentError: Value "debug" for LEVEL is not allowed: allowed values are :info, :warn, :error
+```
+
+```bash
+# symbol values stay distinct
+ruby -Ilib exe/rubycli --strict examples/strict_choices_demo.rb report :warn
+#=> [WARN] format=text
+
+ruby -Ilib exe/rubycli --strict examples/strict_choices_demo.rb report warn
+#=> Rubycli::ArgumentError: Value "warn" for LEVEL is not allowed: allowed values are :info, :warn, :error
+```
+
+### Standard library type hints
+
+Doc comments can reference standard classes such as `Date`, `Time`, `BigDecimal`, or `Pathname`. Rubycli loads the necessary stdlib files on demand and coerces CLI inputs using the documented types.
+
+```bash
+# see examples/typed_arguments_demo.rb
+ruby examples/typed_arguments_demo.rb ingest \
+  --date 2024-12-25 \
+  --moment 2024-12-25T10:00:00Z \
+  --budget 123.45 \
+  --input ./data/input.csv
+```
+
+This command prints a normalized summary and the handler receives real `Date`, `Time`, `BigDecimal`, and `Pathname` objects without manual parsing.
+
+Each option has a sensible default, so you can also experiment one at a time (for example `ruby examples/typed_arguments_demo.rb ingest --budget 999.99`).
+
 Other YARD tags such as `@example`, `@raise`, `@see`, and `@deprecated` are currently ignored by the CLI renderer.
 
 > Want to explore every notation in a single script? Try `rubycli examples/documentation_style_showcase.rb canonical --help`, `... angled --help`, or the other showcase commands.
@@ -359,7 +401,7 @@ Options:
   --notify         [Boolean]  optional  (default: false)
 ```
 
-Here only `AMOUNT` is documented, yet `factor`, `clamp`, and `notify` are still presented with sensible defaults and inferred types. Enable strict mode (`RUBYCLI_STRICT=ON`) if you want mismatches between comments and signatures to surface as warnings during development.
+Here only `AMOUNT` is documented, yet `factor`, `clamp`, and `notify` are still presented with sensible defaults and inferred types. Run `rubycli --check path/to/script.rb` during development to surface mismatches between comments and signatures, and pass `--strict` when executing commands to enforce the documented types/choices.
 
 #### What if the docs mention arguments that do not exist?
 
@@ -436,7 +478,8 @@ This keeps `--new` available for quick zero-argument instantiation while allowin
 | Flag / Env | Description | Default |
 | ---------- | ----------- | ------- |
 | `--debug` / `RUBYCLI_DEBUG=true` | Print debug logs | `false` |
-| `RUBYCLI_STRICT=ON` | Enable strict mode validation (prints warnings on comment/signature drift) | `OFF` |
+| `--check` | Validate documentation/comments without executing commands | `off` |
+| `--strict` | Enforce documented choices/types; invalid input aborts | `off` |
 | `RUBYCLI_ALLOW_PARAM_COMMENT=OFF` | Disable legacy `@param` lines (defaults to on today for compatibility) | `ON` |
 
 ## Library helpers

@@ -21,6 +21,16 @@ module ExtraDocSamples
       name
     end
   end
+
+  module Choices
+    module_function
+
+    # LEVEL [:info, :warn] Severity level
+    # --accept SOURCE [:official, :linked_content, Boolean] Sources to include
+    def select(level, accept: :official)
+      [level, accept]
+    end
+  end
 end
 
 class DocumentationRegistryTest < Minitest::Test
@@ -239,5 +249,17 @@ class DocumentationRegistryTest < Minitest::Test
     detail_lines = metadata[:detail_lines]
     refute_nil detail_lines
     assert_includes detail_lines, '--ghost [Boolean] Option not implemented'
+  end
+
+  def test_literal_choices_are_parsed
+    metadata = @registry.metadata_for(ExtraDocSamples::Choices.method(:select))
+
+    level_doc = metadata[:positionals].first
+    assert_equal %i[info warn], level_doc.allowed_values.map { |entry| entry[:value] }
+
+    accept_opt = metadata[:options].find { |opt| opt.keyword == :accept }
+    refute_nil accept_opt
+    assert_equal %i[official linked_content], accept_opt.allowed_values.map { |entry| entry[:value] }
+    assert_includes accept_opt.types, 'Boolean'
   end
 end

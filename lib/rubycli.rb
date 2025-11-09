@@ -216,43 +216,65 @@ module Rubycli
       constant_mode: nil
     )
       raise ArgumentError, 'target_path must be specified' if target_path.nil? || target_path.empty?
-      original_program_name = $PROGRAM_NAME
       if json && eval_args
         raise Error, '--json-args cannot be combined with --eval-args or --eval-lax'
       end
 
-      full_path = find_target_path(target_path)
-      capture = Rubycli.constant_capture
-      capture.capture(full_path) { load full_path }
+      runner_target, full_path = prepare_runner_target(
+        target_path,
+        class_name,
+        new: new,
+        pre_scripts: pre_scripts,
+        constant_mode: constant_mode
+      )
+
+      original_program_name = $PROGRAM_NAME
+      original_argv = nil
       $PROGRAM_NAME = File.basename(full_path)
-      constant_mode ||= Rubycli.environment.constant_resolution_mode
-      candidates = build_constant_candidates(full_path, capture.constants_for(full_path))
-      defined_constants = candidates.map(&:name)
-
-      target = if class_name
-                 constantize(
-                   class_name,
-                   defined_constants: defined_constants,
-                   full_path: full_path
-                 )
-               else
-                 select_constant_candidate(
-                   full_path,
-                   camelize(File.basename(full_path, '.rb')),
-                   candidates,
-                   constant_mode,
-                   instantiate: new
-                 )
-               end
-      runner_target = new ? instantiate_target(target) : target
-      runner_target = apply_pre_scripts(pre_scripts, target, runner_target)
-
       original_argv = ARGV.dup
       ARGV.replace(Array(cli_args).dup)
       run_with_modes(runner_target, json: json, eval_args: eval_args, eval_lax: eval_lax)
     ensure
       $PROGRAM_NAME = original_program_name if original_program_name
       ARGV.replace(original_argv) if original_argv
+    end
+
+    def check(
+      target_path,
+      class_name = nil,
+      new: false,
+      pre_scripts: [],
+      constant_mode: nil
+    )
+      raise ArgumentError, 'target_path must be specified' if target_path.nil? || target_path.empty?
+      previous_doc_check = Rubycli.environment.doc_check_mode?
+      Rubycli.environment.clear_documentation_issues!
+      Rubycli.environment.enable_doc_check!
+
+      runner_target, full_path = prepare_runner_target(
+        target_path,
+        class_name,
+        new: new,
+        pre_scripts: pre_scripts,
+        constant_mode: constant_mode
+      )
+
+      original_program_name = $PROGRAM_NAME
+      $PROGRAM_NAME = File.basename(full_path)
+
+      Rubycli.cli.command_catalog_for(runner_target)
+
+      issues = Rubycli.environment.documentation_issues
+      if issues.empty?
+        puts 'rubycli documentation OK'
+        0
+      else
+        warn "rubycli documentation check failed (#{issues.size} issue#{issues.size == 1 ? '' : 's'})"
+        1
+      end
+    ensure
+      Rubycli.environment.disable_doc_check! unless previous_doc_check
+      $PROGRAM_NAME = original_program_name if original_program_name
     end
 
     def apply_pre_scripts(sources, base_target, initial_target)
@@ -340,6 +362,41 @@ module Rubycli
       else
         runner.call
       end
+    end
+
+    def prepare_runner_target(
+      target_path,
+      class_name,
+      new: false,
+      pre_scripts: [],
+      constant_mode: nil
+    )
+      full_path = find_target_path(target_path)
+      capture = Rubycli.constant_capture
+      capture.capture(full_path) { load full_path }
+      constant_mode ||= Rubycli.environment.constant_resolution_mode
+      candidates = build_constant_candidates(full_path, capture.constants_for(full_path))
+      defined_constants = candidates.map(&:name)
+
+      target = if class_name
+                 constantize(
+                   class_name,
+                   defined_constants: defined_constants,
+                   full_path: full_path
+                 )
+               else
+                 select_constant_candidate(
+                   full_path,
+                   camelize(File.basename(full_path, '.rb')),
+                   candidates,
+                   constant_mode,
+                   instantiate: new
+                 )
+               end
+
+      runner_target = new ? instantiate_target(target) : target
+      runner_target = apply_pre_scripts(pre_scripts, target, runner_target)
+      [runner_target, full_path]
     end
 
     def build_constant_candidates(path, constant_names)
