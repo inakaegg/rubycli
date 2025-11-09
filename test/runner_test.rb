@@ -169,4 +169,37 @@ class RunnerTest < Minitest::Test
       Object.send(:remove_const, :BetaRunner) if Object.const_defined?(:BetaRunner)
     end
   end
+
+  def test_check_reports_missing_documentation
+    Dir.mktmpdir do |dir|
+      file = File.join(dir, 'doc_check_runner.rb')
+      File.write(file, <<~RUBY)
+        class DocCheckRunner
+          # @param name [String] Documented name
+          # @param extra [String] This param does not exist
+          def self.run(name)
+            name
+          end
+        end
+      RUBY
+
+      Rubycli.documentation_registry.reset!
+      Rubycli.environment.clear_documentation_issues!
+
+      status = nil
+      out, err = capture_io do
+        status = Rubycli::Runner.check(file, 'DocCheckRunner')
+      end
+
+      assert_equal 1, status
+      assert_equal '', out
+      assert_includes err, 'rubycli documentation check failed'
+      refute_empty Rubycli.environment.documentation_issues
+    ensure
+      Rubycli.documentation_registry.reset!
+      Rubycli.environment.clear_documentation_issues!
+      Rubycli.environment.disable_doc_check!
+      Object.send(:remove_const, :DocCheckRunner) if Object.const_defined?(:DocCheckRunner)
+    end
+  end
 end

@@ -153,6 +153,28 @@ class CommandLineTest < Minitest::Test
     assert_equal true, captured[:opts][:eval_lax]
   end
 
+  def test_accepts_short_flag_for_check_mode
+    argv = [
+      '-c',
+      'test/fixtures/doc_examples.rb'
+    ]
+
+    captured = nil
+    Rubycli::Runner.stub(:execute, ->(*) { flunk 'Runner.execute should not be invoked for --check' }) do
+      Rubycli::Runner.stub(:check, ->(*args, **opts) { captured = { args: args, opts: opts }; 0 }) do
+        status = Rubycli::CommandLine.run(argv)
+        assert_equal 0, status
+      ensure
+        Rubycli.environment.disable_doc_check!
+        Rubycli.environment.clear_documentation_issues!
+      end
+    end
+
+    refute_nil captured
+    assert_equal ['test/fixtures/doc_examples.rb', nil], captured[:args]
+    assert_equal false, captured[:opts][:new]
+  end
+
   def test_pre_script_allows_space_separated_value
     argv = [
       '--pre-script',

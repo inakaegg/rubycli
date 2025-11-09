@@ -262,7 +262,16 @@ module Rubycli
       original_program_name = $PROGRAM_NAME
       $PROGRAM_NAME = File.basename(full_path)
 
-      Rubycli.cli.command_catalog_for(runner_target)
+      catalog = Rubycli.cli.command_catalog_for(runner_target)
+      Array(catalog&.entries).each do |entry|
+        method_obj = entry&.method
+        Rubycli.documentation_registry.metadata_for(method_obj) if method_obj
+      end
+
+      if catalog&.entries&.empty? && runner_target.respond_to?(:call)
+        method_obj = runner_target.method(:call) rescue nil
+        Rubycli.documentation_registry.metadata_for(method_obj) if method_obj
+      end
 
       issues = Rubycli.environment.documentation_issues
       if issues.empty?

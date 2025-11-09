@@ -3,7 +3,7 @@
 module Rubycli
   module CommandLine
     USAGE = <<~USAGE
-      Usage: rubycli [--new|-n] [--pre-script=<src>] [--json-args|-j | --eval-args|-e | --eval-lax|-E] [--strict] [--check] <target-path> [<class-or-module>] [-- <cli-args>...]
+      Usage: rubycli [--new|-n] [--pre-script=<src>] [--json-args|-j | --eval-args|-e | --eval-lax|-E] [--strict] [--check|-c] <target-path> [<class-or-module>] [-- <cli-args>...]
 
       Examples:
         rubycli scripts/sample_runner.rb echo --message hello
@@ -18,7 +18,7 @@ module Rubycli
         --eval-lax, -E       Evaluate as Ruby but fall back to raw strings when parsing fails
         --auto-target, -a    Auto-select the only callable constant when names don't match
         --strict             Enforce documented input types/choices (invalid values abort)
-        --check              Validate documentation/comments without executing commands
+        --check, -c          Validate documentation/comments without executing commands
         (Note: --json-args cannot be combined with --eval-args or --eval-lax)
         (Note: Every option that accepts a value understands both --flag=value and --flag value forms.)
 
@@ -85,7 +85,7 @@ module Rubycli
         when '--strict'
           Rubycli.environment.enable_strict_input!
           args.shift
-        when '--check'
+        when '--check', '-c'
           check_mode = true
           Rubycli.environment.enable_doc_check!
           args.shift
