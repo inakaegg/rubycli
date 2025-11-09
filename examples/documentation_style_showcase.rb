@@ -51,7 +51,7 @@ module DocumentationStyleShowcase
   #
   # <subject> [String] Subject identifier to capture
   # <count> [Integer, nil] Repetition count (accepts nil)
-  # prefix [String, nil] Heading for the entry
+  # --prefix PREFIX [String, nil] Heading for the entry
   # --tags <tag>... [String[]] JSON/YAML array or comma-separated tags (repeatable)
   # --quiet [Boolean] Suppress the trailing newline marker
   # => [Hash] Summary of captured attributes
@@ -63,7 +63,7 @@ module DocumentationStyleShowcase
   #
   # <subject> [String] Subject identifier
   # <count> [Integer] Repetition count
-  # prefix [String] Title prefix
+  # --prefix PREFIX [String] Title prefix
   # --tags <tag>... [String[]] JSON/YAML array or comma-separated list
   # --quiet [Boolean]
   def typed_min(subject, count = 1, prefix: nil, tags: nil, quiet: false)

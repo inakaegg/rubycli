@@ -33,7 +33,6 @@ Available commands:
     greet                <NAME>
 
 Detailed command help: hello_app.rb COMMAND help
-Enable debug logging: --debug or RUBYCLI_DEBUG=true
 ```
 
 ```bash
@@ -107,7 +106,6 @@ Available commands:
     greet                <NAME> [--shout]
 
 Detailed command help: hello_app_with_docs.rb COMMAND help
-Enable debug logging: --debug or RUBYCLI_DEBUG=true
 ```
 
 ```bash
@@ -378,7 +376,6 @@ Available commands:
     scale                AMOUNT [<FACTOR>] [--clamp=<value>] [--notify]
 
 Detailed command help: fallback_example.rb COMMAND help
-Enable debug logging: --debug or RUBYCLI_DEBUG=true
 ```
 
 ```bash
@@ -482,7 +479,7 @@ rubycli --pre-script scripts/bootstrap_runner.rb \
 
 | 変数 / フラグ | 説明 | 既定値 |
 | ------------- | ---- | ------ |
-| `--debug` / `RUBYCLI_DEBUG=true` | デバッグログ表示 | `false` |
+| `RUBYCLI_DEBUG=true` | デバッグログ表示 | `false` |
 | `--check` | コメント／実装のズレを検査し、コマンドは実行しない | `off` |
 | `--strict` | ドキュメントで許可した型・値以外をエラーとして拒否 | `off` |
 | `RUBYCLI_ALLOW_PARAM_COMMENT=OFF` | レガシーな `@param` 記法を無効化（互換性のため既定では ON） | `ON` |

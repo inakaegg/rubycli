@@ -35,7 +35,6 @@ Available commands:
     greet                <NAME>
 
 Detailed command help: hello_app.rb COMMAND help
-Enable debug logging: --debug or RUBYCLI_DEBUG=true
 ```
 
 ```bash
@@ -109,7 +108,6 @@ Available commands:
     greet                <NAME> [--shout]
 
 Detailed command help: hello_app_with_docs.rb COMMAND help
-Enable debug logging: --debug or RUBYCLI_DEBUG=true
 ```
 
 ```bash
@@ -387,7 +385,6 @@ Available commands:
     scale                AMOUNT [<FACTOR>] [--clamp=<value>] [--notify]
 
 Detailed command help: fallback_example.rb COMMAND help
-Enable debug logging: --debug or RUBYCLI_DEBUG=true
 ```
 
 ```bash
@@ -490,7 +487,7 @@ This keeps `--new` available for quick zero-argument instantiation while allowin
 
 | Flag / Env | Description | Default |
 | ---------- | ----------- | ------- |
-| `--debug` / `RUBYCLI_DEBUG=true` | Print debug logs | `false` |
+| `RUBYCLI_DEBUG=true` | Print debug logs | `false` |
 | `--check` | Validate documentation/comments without executing commands | `off` |
 | `--strict` | Enforce documented choices/types; invalid input aborts | `off` |
 | `RUBYCLI_ALLOW_PARAM_COMMENT=OFF` | Disable legacy `@param` lines (defaults to on today for compatibility) | `ON` |

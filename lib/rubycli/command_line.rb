@@ -90,7 +90,11 @@ module Rubycli
           Rubycli.environment.enable_doc_check!
           args.shift
         when '--print-result'
-         args.shift
+          args.shift
+        when '--debug'
+          args.shift
+          warn "[ERROR] --debug flag has been removed; set RUBYCLI_DEBUG=true instead."
+          return 1
         when '--auto-target', '-a'
           constant_mode = :auto
           args.shift

@@ -101,7 +101,6 @@ module Rubycli
     def scrub_argv_flags!
       return unless @argv
 
-      remove_all_flags!(@argv, '--debug') { @debug = true }
       remove_all_flags!(@argv, '--print-result') { @print_result = true }
     end
 

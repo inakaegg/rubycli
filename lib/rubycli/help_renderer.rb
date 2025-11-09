@@ -45,7 +45,6 @@ module Rubycli
 
       puts
       puts "Detailed command help: #{File.basename($PROGRAM_NAME)} COMMAND help"
-      puts "Enable debug logging: --debug or RUBYCLI_DEBUG=true"
     end
 
     def method_description(method_obj)

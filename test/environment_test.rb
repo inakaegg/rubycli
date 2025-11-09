@@ -3,15 +3,19 @@
 require 'test_helper'
 
 class EnvironmentTest < Minitest::Test
-  def test_debug_and_print_flags_are_enabled_and_removed_from_argv
-    argv = ['--debug', 'run', '--print-result', '--debug']
+  def test_print_flag_is_enabled_and_removed_from_argv
+    argv = ['--print-result', 'run']
     env = Rubycli::Environment.new(env: {}, argv: argv)
 
-    assert env.debug?, 'debug flag should be enabled'
+    refute env.debug?, 'debug flag should remain off unless ENV requests it'
     assert env.print_result?, 'print-result flag should be enabled'
-    refute_includes argv, '--debug'
     refute_includes argv, '--print-result'
     assert_equal %w[run], argv
+  end
+
+  def test_debug_flag_is_enabled_via_environment_variable
+    env = Rubycli::Environment.new(env: { 'RUBYCLI_DEBUG' => 'true' })
+    assert env.debug?
   end
 
   def test_doc_check_and_param_comment_flags_respect_environment
