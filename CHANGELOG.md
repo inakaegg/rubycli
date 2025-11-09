@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.1.5] - 2025-11-10
+
+### Added
+- `rubycli --check` gained a short `-c` alias and refuses to run target commands while linting, making documentation checks easier to script.
+- Bundled `examples/strict_choices_demo.rb` and `examples/typed_arguments_demo.rb` now illustrate literal choice validation and stdlib type coercions.
+
+### Changed
+- Runtime validation now reads the documented literal choices and inferred types for both positional and keyword arguments; invalid values emit `[WARN] …` guidance by default and raise `Rubycli::ArgumentError` under `--strict` with friendly suggestions.
+- Help output renders positional arguments and options as structured tables showing requirement level, types, defaults, and descriptions for quicker scanning.
+- Documentation comments are aligned with the actual method signature, and mismatches surface with file/line context during `rubycli --check`.
+- CLI warnings/errors are prefixed with `[WARN]` / `[ERROR]`, and the deprecated `--debug` flag was removed in favor of `RUBYCLI_DEBUG=true`.
+
+### Fixed
+- `--check` now rejects forwarded CLI arguments as well as JSON/Eval modes, ensuring documentation linting never executes user code and always starts from a clean issue list.
+- Placeholder parsing keeps option descriptions such as `--prefix` in the documentation showcase so README snippets and live behavior stay in sync.
+
 ## [0.1.4] - 2025-11-08
 
 ### Changed
