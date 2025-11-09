@@ -285,4 +285,14 @@ class DocumentationRegistryTest < Minitest::Test
     assert_equal ['String'], subject_doc.types
     refute_includes subject_doc.types, 'Boolean'
   end
+
+  def test_prefix_option_in_showcase_is_parsed_with_description
+    metadata = @registry.metadata_for(DocumentationStyleShowcase.method(:typed))
+    prefix_opt = metadata[:options].find { |opt| opt.keyword == :prefix }
+    refute_nil prefix_opt
+    assert_equal '--prefix', prefix_opt.long
+    assert_equal ['String', 'nil'], prefix_opt.types
+    assert_equal 'Heading for the entry', prefix_opt.description
+    assert_equal '[String, nil]', prefix_opt.inline_type_text
+  end
 end

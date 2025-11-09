@@ -195,4 +195,22 @@ class CommandLineTest < Minitest::Test
       captured[:opts][:pre_scripts]
     )
   end
+
+  def test_debug_flag_is_rejected_with_helpful_message
+    argv = [
+      '--debug',
+      'test/fixtures/doc_examples.rb'
+    ]
+
+    Rubycli::Runner.stub(:execute, ->(*) { flunk 'Runner should not be invoked when --debug is rejected' }) do
+      status = nil
+      out, err = capture_io do
+        status = Rubycli::CommandLine.run(argv)
+      end
+
+      assert_equal 1, status
+      assert_equal '', out
+      assert_includes err, 'RUBYCLI_DEBUG=true'
+    end
+  end
 end
