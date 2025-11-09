@@ -7,6 +7,9 @@
 
 > _Note:_ 0.1.3 was yanked before general availability; consumers should upgrade directly to 0.1.4.
 
+### Documentation
+- Clarified repeated-value guidance (type enforcement, eval mode workflows) and updated both READMEs to reflect the retirement of `(type: …)` annotations while preserving the historical changelog entry.
+
 ## [0.1.3] - 2025-11-08
 
 ### Added

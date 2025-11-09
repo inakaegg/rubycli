@@ -33,6 +33,13 @@ module ExtraDocSamples
   end
 end
 
+module InlineDocSamples
+  module_function
+
+  # --query QUERY Search query passed to DuckDuckGo
+  def search(query:); end
+end
+
 class DocumentationRegistryTest < Minitest::Test
   def setup
     @environment = Rubycli::Environment.new(env: {}, argv: [])
@@ -261,5 +268,21 @@ class DocumentationRegistryTest < Minitest::Test
     refute_nil accept_opt
     assert_equal %i[official linked_content], accept_opt.allowed_values.map { |entry| entry[:value] }
     assert_includes accept_opt.types, 'Boolean'
+  end
+
+  def test_inline_option_without_type_defaults_to_string
+    metadata = @registry.metadata_for(InlineDocSamples.method(:search))
+    option = metadata[:options].find { |opt| opt.keyword == :query }
+    refute_nil option
+    assert_equal ['String'], option.types
+    refute option.inline_type_annotation
+  end
+
+  def test_minimal_yard_params_infer_string_types
+    metadata = @registry.metadata_for(DocumentationStyleShowcase.method(:yard_min))
+    subject_doc = metadata[:positionals_map][:subject]
+    refute_nil subject_doc
+    assert_equal ['String'], subject_doc.types
+    refute_includes subject_doc.types, 'Boolean'
   end
 end

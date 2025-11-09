@@ -130,6 +130,7 @@ module Rubycli
         return nil unless match
 
         param_name = match[1]
+        param_symbol = param_name.to_sym
         type_str = match[2]
         option_tokens = combine_bracketed_tokens(match[3]&.split(/\s+/) || [])
         description = match[4]&.strip
@@ -180,6 +181,15 @@ module Rubycli
         end
 
         long_option ||= "--#{param_name.tr('_', '-')}"
+        role = parameter_role(method_obj, param_symbol)
+        if value_name.nil?
+          if role == :positional
+            value_name = default_placeholder_for(param_symbol)
+          elsif !types&.any? { |entry| boolean_type?(entry) }
+            # Most keywords expect a value; boolean flags should be documented with [Boolean].
+            value_name = default_placeholder_for(param_symbol)
+          end
+        end
 
         if (types.nil? || types.empty?) && type_token
           inline_raw_types = parse_type_annotation(type_token)
@@ -188,8 +198,9 @@ module Rubycli
           allowed_values = merge_allowed_values(allowed_values, inline_allowed)
         end
 
+        # TODO: Derive primitive types from Ruby default values when explicit hints are absent.
         option_def = build_option_definition(
-          param_name.to_sym,
+          param_symbol,
           long_option,
           short_option,
           value_name,
@@ -199,9 +210,6 @@ module Rubycli
           doc_format: :tagged_param,
           allowed_values: allowed_values
         )
-
-        param_symbol = param_name.to_sym
-        role = parameter_role(method_obj, param_symbol)
 
         if role == :positional
           placeholder = option_def.value_name || default_placeholder_for(option_def.keyword)
@@ -510,7 +518,7 @@ module Rubycli
                 fallback = PositionalDefinition.new(
                   placeholder: name.to_s,
                   label: name.to_s.upcase,
-                  types: [],
+                  types: ['String'],
                   description: nil,
                   param_name: name,
                   default_value: defaults[name],
@@ -573,6 +581,11 @@ module Rubycli
                 opt.value_name = nil
                 opt.types = ['Boolean']
               end
+            elsif opt.boolean_flag
+              opt.boolean_flag = false
+              opt.requires_value = true
+              opt.value_name ||= default_placeholder_for(opt.keyword)
+              opt.types = ['String'] if opt.types.nil? || opt.types.empty?
             end
           end
         end
@@ -759,9 +772,15 @@ module Rubycli
         return false if stripped.empty?
 
         return true if stripped.start_with?('@')
+        return true if stripped.start_with?('%')
+        return true if stripped.include?('::')
+        return true if stripped.start_with?('(') && stripped.end_with?(')')
+        return true if stripped.include?('[') && stripped.include?(']')
 
-        parsed = parse_type_annotation(stripped)
-        !parsed.empty?
+        normalized = normalize_type_token(stripped)
+        return false if normalized.empty?
+
+        INLINE_TYPE_HINTS.include?(normalized)
       end
 
       def known_type_token?(token)

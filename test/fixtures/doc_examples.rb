@@ -31,7 +31,7 @@ module DocExamples
     # <subject> (String) Subject to describe
     # [<count>] (Integer) Number of repetitions
     # --style -s <style> (String) Style flag
-    # --tags=<tag>... (type: String[]) Comma-separated tags
+    # --tags=<tag>... [String[]] Comma-separated tags
     # => [String] Description text
     def describe(subject, count = 1, style: nil, tags: nil)
       base = ([subject] * count).join(' ')
@@ -58,9 +58,9 @@ module DocExamples
 
   class TypeHintSamples
     # <file> (String) File path to analyse
-    # [<pattern>] (type: String, nil) Optional pattern to filter with
+    # [<pattern>] [String, nil] Optional pattern to filter with
     # --format=<format> (String) Output format label
-    # --tags <tag>... (type:String[]) Tags forwarded to the renderer
+    # --tags <tag>... [String[]] Tags forwarded to the renderer
     def analyse(file, pattern = nil, format: 'plain', tags: nil)
       {
         file: file,

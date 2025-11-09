@@ -59,8 +59,8 @@ class HelpRendererTest < Minitest::Test
       Usage: rubycli fallback NAME [ATTEMPTS] [--safe-mode] [--tag=<TAG>]
 
       Positional arguments:
-        NAME        required
-        ATTEMPTS    optional  (default: 3)
+        NAME      [String]  required
+        ATTEMPTS  [String]  optional  (default: 3)
 
       Options:
         --safe-mode  [Boolean]  optional  (default: true)

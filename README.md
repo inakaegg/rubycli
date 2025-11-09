@@ -293,21 +293,26 @@ The CLI treats `--flag VALUE`, `--flag <value>`, and `--flag=<value>` identicall
 
 > Tip: You do not need to wrap optional arguments in brackets inside the comment. Rubycli already knows which parameters are optional from the Ruby signature and will introduce the brackets in generated help.
 
-You can annotate types using `[String]`, `(String)`, or `(type: String)`—they all convey the same hint, and you can list multiple types such as `(String, nil)` or `(type: String, nil)`.
+You can annotate types using `[String]` or `(String)`—they both convey the same hint, and you can list multiple types such as `(String, nil)`.
 
-Repeated values (`VALUE...`) now materialize as arrays automatically whenever the option is documented with an ellipsis (for example `TAG...`) or an explicit array type hint (`[String[]]`, `Array<String>`). Supply either JSON/YAML list syntax (`--tags "[\"build\",\"test\"]"`) or a comma-delimited string (`--tags "build,test"`); Rubycli will coerce both forms to arrays. Space-separated multi-value flags (`--tags build test`) are still not supported, and options without a repeated/array hint continue to be parsed as scalars.
+Repeated values (`VALUE...`) now materialize as arrays automatically whenever the option is documented with an ellipsis (for example `TAG...`) or an explicit array type hint (`[String[]]`, `Array<String>`). Supply either JSON/YAML list syntax (`--tags "[\"build\",\"test\"]"`) or a comma-delimited string (`--tags "build,test"`); Rubycli will coerce both forms to arrays. Space-separated multi-value flags (`--tags build test`) are still not supported, and options without a repeated/array hint continue to be parsed as scalars. Strict mode still verifies each element against the documented type, so `--tags [1,2]` will fail when the docs say `[String[]]`.
+
+Need to pass structures that are awkward to express as JSON (for example symbol arrays or hashes)? Enable eval mode (`--eval-args`/`-e` or `--eval-lax`/`-E`) and supply a Ruby literal that matches the documented type; the example in the eval section below shows how to pass multiple enum selections safely even though space-separated syntax remains unsupported.
 
 Common inference rules:
 
 - Writing a placeholder such as `ARG1` (without `[String]`) makes Rubycli treat it as a `String`.
 - Using that placeholder in an option line (`--name ARG1`) also infers a `String`.
 - Omitting the placeholder entirely (`--verbose`) produces a Boolean flag.
+- Positional arguments only become booleans when you annotate `[Boolean]`; a bare `NAME Description` (or `@param name Description`) falls back to `String`, regardless of the Ruby default value.
 
 ### Literal choices and enums
 
 You can express a finite set of accepted values directly inside the type annotation, for example `--format MODE [:json, :yaml, :auto]` or `LEVEL [:info, :warn]`. Symbols, strings (including barewords), booleans, numbers, and `nil` are supported, and you can mix literal entries with broader types such as `--channel TARGET [:stdout, :stderr, Boolean]`. `%i[info warn]` / `%w[debug info]` short-hands expand as expected, so `LEVEL %i[info warn]` works the same as the explicit array form. Rubycli always records these choices in the generated help; when you run with `--strict`, any value outside the documented set results in `Rubycli::ArgumentError`, otherwise a warning is printed and execution proceeds.
 
 > Symbols and strings are compared strictly. `[:info, :warn]` requires symbol inputs such as `:info`, while `["info", "warn"]` only accepts plain strings. Prefix a value with `:` at the CLI to pass a symbol.
+
+> Literal enums currently apply to each scalar argument. If an option is documented as an array (for example `[Symbol[]]`), spell out the allowed members in prose for now—combined literal arrays such as `[%i[foo bar][]]` are not supported.
 
 ```bash
 # literal choices + booleans (see examples/strict_choices_demo.rb)
@@ -436,6 +441,14 @@ rubycli -e scripts/data_cli.rb DataCLI run '(1..10).to_a'
 ```
 
 Under the hood Rubycli evaluates each argument inside an isolated binding (`Object.new.instance_eval { binding }`). Treat this as unsafe input: do not enable it for untrusted callers. The mode can also be toggled programmatically via `Rubycli.with_eval_mode(true) { … }`.
+
+Because Ruby evaluation understands symbols, arrays, and hashes, it’s a convenient way to pass literal enum combinations to options that expect arrays:
+
+```bash
+rubycli -E scripts/report_runner.rb publish \
+  --targets '[:marketing, :sales]' \
+  --channels '[:email, :slack]'
+```
 
 Need Ruby evaluation plus a safety net? Pass `--eval-lax` (or `-E`). It flips on eval mode just like `--eval-args`, but if Ruby fails to parse a token (for example, a bare `https://example.com`), Rubycli emits a warning and forwards the original string unchanged. This lets you mix inline math (`60*60*24*14`) with literal values without constantly juggling quotes.
 

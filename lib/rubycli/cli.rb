@@ -155,12 +155,11 @@ module Rubycli
     def execute_method_with_params(method_obj, command, args, cli_mode)
       pos_args, kw_args = @argument_parser.parse(args, method_obj)
       Rubycli.apply_argument_coercions(pos_args, kw_args)
-      @argument_parser.validate_inputs(method_obj, pos_args, kw_args)
-
       if should_show_method_help?(pos_args, kw_args)
         puts usage_for_method(command, method_obj)
         return 0
       end
+      @argument_parser.validate_inputs(method_obj, pos_args, kw_args)
 
       begin
         result = Rubycli.call_target(method_obj, pos_args, kw_args)

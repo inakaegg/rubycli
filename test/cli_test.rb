@@ -56,4 +56,21 @@ class CLITest < Minitest::Test
     assert_equal 0, target.calls
     assert_includes out, 'Usage: rubycli info'
   end
+
+  def test_help_input_skips_strict_validation
+    method_obj = ChoiceDocSamples.method(:report)
+    status = nil
+    out, err = capture_io do
+      status = @cli.send(:execute_method_with_params, method_obj, 'report', ['help'], true)
+    end
+    assert_equal 0, status
+    assert_includes out, 'Usage:'
+    assert_equal '', err
+  end
+end
+module ChoiceDocSamples
+  module_function
+
+  # LEVEL %i[info warn] Report level
+  def report(level); end
 end
