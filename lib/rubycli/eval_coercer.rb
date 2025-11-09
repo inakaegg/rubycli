@@ -47,7 +47,7 @@ module Rubycli
       EVAL_BINDING.eval(trimmed)
     rescue SyntaxError, NameError => e
       if eval_lax_mode?
-        warn "[rubycli] Failed to evaluate argument as Ruby (#{e.message.strip}). Passing it through because --eval-lax is enabled."
+        warn "[WARN] Failed to evaluate argument as Ruby (#{e.message.strip}). Passing it through because --eval-lax is enabled."
         expression
       else
         raise

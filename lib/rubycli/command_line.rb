@@ -67,7 +67,7 @@ module Rubycli
           flag = args.shift
           src = args.shift
           unless src
-            warn "#{flag} requires a file path or inline Ruby code"
+            warn "[ERROR] #{flag} requires a file path or inline Ruby code"
             return 1
           end
           context = File.file?(src) ? File.expand_path(src) : "(inline #{flag})"
@@ -116,17 +116,17 @@ module Rubycli
       args.shift if args.first == '--'
 
       if json_mode && eval_mode
-        warn '--json-args cannot be combined with --eval-args or --eval-lax'
+        warn '[ERROR] --json-args cannot be combined with --eval-args or --eval-lax'
         return 1
       end
 
       if check_mode && (json_mode || eval_mode)
-        warn '--check cannot be combined with --json-args or --eval-args'
+        warn '[ERROR] --check cannot be combined with --json-args or --eval-args'
         return 1
       end
 
       if check_mode && !args.empty?
-        warn '--check does not accept command arguments'
+        warn '[ERROR] --check does not accept command arguments'
         return 1
       end
 
@@ -156,10 +156,10 @@ module Rubycli
 
       0
     rescue Rubycli::Runner::PreScriptError => e
-      warn e.message
+      warn "[ERROR] #{e.message}"
       1
     rescue Rubycli::Runner::Error => e
-      warn e.message
+      warn "[ERROR] #{e.message}"
       1
     end
   end

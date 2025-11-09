@@ -278,7 +278,7 @@ module Rubycli
         puts 'rubycli documentation OK'
         0
       else
-        warn "rubycli documentation check failed (#{issues.size} issue#{issues.size == 1 ? '' : 's'})"
+        warn "[ERROR] rubycli documentation check failed (#{issues.size} issue#{issues.size == 1 ? '' : 's'})"
         1
       end
     ensure
