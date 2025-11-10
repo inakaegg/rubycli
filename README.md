@@ -180,6 +180,8 @@ This keeps large projects safe by default but still provides a one-flag escape h
 - Optional pre-script hook (`--pre-script` / `--init`) to evaluate Ruby and expose the resulting object
 - Dedicated CLI flags for quality gates: `--check` lints documentation/comments without running commands, and `--strict` treats documented types/choices as hard requirements
 
+> Tip: `--strict` trusts whatever types/choices your comments spell out—if the annotations are misspelled, runtime enforcement has nothing reliable to compare against. Keep `rubycli --check` in CI so documentation typos are caught before production runs that rely on `--strict`.
+
 ## How it differs from Python Fire
 
 - **Comment-aware help** – Rubycli leans on doc comments when present but still reflects the live method signature, keeping code as the ultimate authority.

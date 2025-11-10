@@ -531,19 +531,24 @@ module Rubycli
 
     def build_missing_constant_message(name, defined_constants, full_path, details: nil)
       lines = ["Could not find definition: #{name}"]
-      lines << "  Loaded file: #{File.expand_path(full_path)}" if full_path
+      lines << ''
+      lines << "Loaded file: #{File.expand_path(full_path)}" if full_path
 
       if defined_constants && !defined_constants.empty?
         sample = defined_constants.first(5)
-        suffix = defined_constants.size > sample.size ? " ... (#{defined_constants.size} total)" : ''
-        lines << "  Constants found in this file: #{sample.join(', ')}#{suffix}"
+        suffix = defined_constants.size > sample.size ? " … (#{defined_constants.size} total)" : ''
+        lines << "Constants found in this file: #{sample.join(', ')}#{suffix}"
       else
-        lines << "  Rubycli could not detect any publicly exposable constants in this file."
+        lines << 'Rubycli could not detect any publicly exposable constants in this file.'
       end
 
-      lines << "  #{details}" if details
+      if details
+        lines << ''
+        lines << details
+      end
 
-      lines << "  Ensure the CLASS_OR_MODULE argument is correct when invoking the CLI."
+      lines << ''
+      lines << 'Hint: Ensure the CLASS_OR_MODULE argument is correct when invoking the CLI.'
       lines.join("\n")
     end
   end
