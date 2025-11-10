@@ -295,4 +295,32 @@ class DocumentationRegistryTest < Minitest::Test
     assert_equal 'Heading for the entry', prefix_opt.description
     assert_equal '[String, nil]', prefix_opt.inline_type_text
   end
+
+  def test_unknown_type_tokens_are_reported_in_doc_check_mode
+    @environment.enable_doc_check!
+    @environment.clear_documentation_issues!
+
+    method = DocTypoSamples.method(:toggle)
+    @registry.metadata_for(method)
+
+    issues = @environment.documentation_issues
+    refute_empty issues
+    assert issues.any? { |issue| issue[:message].include?("Unknown type token 'Booalean'") }
+  ensure
+    @environment.disable_doc_check!
+  end
+
+  def test_unknown_allowed_value_tokens_surface_as_documentation_issues
+    @environment.enable_doc_check!
+    @environment.clear_documentation_issues!
+
+    method = DocTypoSamples.method(:set_level)
+    @registry.metadata_for(method)
+
+    issues = @environment.documentation_issues
+    refute_empty issues
+    assert issues.any? { |issue| issue[:message].include?("Unknown allowed value token 'WARNNING'") }
+  ensure
+    @environment.disable_doc_check!
+  end
 end

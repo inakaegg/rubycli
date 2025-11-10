@@ -55,7 +55,7 @@ module Rubycli
             next
           end
 
-          if (return_meta = parse_return_metadata(stripped))
+          if (return_meta = parse_return_metadata(stripped, method_obj))
             metadata[:returns] << return_meta
             summary_phase = false
             next
@@ -68,7 +68,7 @@ module Rubycli
             next
           end
 
-          if (positional = parse_positional_line(stripped))
+          if (positional = parse_positional_line(stripped, method_obj))
             metadata[:positionals] << positional
             summary_phase = false
             next
@@ -137,6 +137,7 @@ module Rubycli
         description = nil if description&.empty?
 
         raw_types = parse_type_annotation(type_str)
+        audit_type_annotation_tokens(raw_types, method_obj)
         types, allowed_values = partition_type_tokens(raw_types)
 
         long_option = nil
@@ -193,6 +194,7 @@ module Rubycli
 
         if (types.nil? || types.empty?) && type_token
           inline_raw_types = parse_type_annotation(type_token)
+          audit_type_annotation_tokens(inline_raw_types, method_obj)
           inline_types, inline_allowed = partition_type_tokens(inline_raw_types)
           types = inline_types
           allowed_values = merge_allowed_values(allowed_values, inline_allowed)
@@ -309,6 +311,7 @@ module Rubycli
         description = description_tokens.join(' ').strip
         description = nil if description.empty?
         raw_types = parse_type_annotation(type_token)
+        audit_type_annotation_tokens(raw_types, method_obj)
         types, allowed_values = partition_type_tokens(raw_types)
 
         keyword = long_option.delete_prefix('--').tr('-', '_').to_sym
@@ -327,7 +330,7 @@ module Rubycli
         )
       end
 
-      def parse_positional_line(line)
+      def parse_positional_line(line, method_obj)
         return nil if line.start_with?('--') || line.start_with?('-')
 
         tokens = combine_bracketed_tokens(line.split(/\s+/))
@@ -346,6 +349,7 @@ module Rubycli
         description = nil if description.empty?
 
         raw_types = parse_type_annotation(type_token)
+        audit_type_annotation_tokens(raw_types, method_obj)
         types, allowed_values = partition_type_tokens(raw_types)
         placeholder_info = analyze_placeholder(placeholder)
         inferred_types = infer_types_from_placeholder(
@@ -371,10 +375,11 @@ module Rubycli
         )
       end
 
-      def parse_return_metadata(line)
+      def parse_return_metadata(line, method_obj)
         yard_match = /\A@return\s+\[([^\]]+)\](?:\s+(.*))?\z/.match(line)
         if yard_match
           types = parse_type_annotation(yard_match[1])
+          audit_type_annotation_tokens(types, method_obj)
           description = yard_match[2]&.strip
           return ReturnDefinition.new(types: types, description: description)
         end
@@ -382,6 +387,7 @@ module Rubycli
         shorthand_match = /\A=>\s+(\[[^\]]+\]|[^\s]+)(?:\s+(.*))?\z/.match(line)
         if shorthand_match
           types = parse_type_annotation(shorthand_match[1])
+          audit_type_annotation_tokens(types, method_obj)
           description = shorthand_match[2]&.strip
           return ReturnDefinition.new(types: types, description: description)
         end
@@ -390,9 +396,72 @@ module Rubycli
           stripped = line.sub(/\Areturn\s+/, '')
           type_token, description = stripped.split(/\s+/, 2)
           types = parse_type_annotation(type_token)
+          audit_type_annotation_tokens(types, method_obj)
           description = description&.strip
           return ReturnDefinition.new(types: types, description: description)
         end
+      end
+
+      def doc_issue_location(method_obj)
+        return [nil, nil] unless method_obj.respond_to?(:source_location)
+
+        source_file, source_line = method_obj.source_location
+        line_number = source_line ? [source_line - 1, 1].max : nil
+        [source_file, line_number]
+      end
+
+      def audit_type_annotation_tokens(tokens, method_obj)
+        return if tokens.nil? || tokens.empty?
+        return unless @environment.doc_check_mode?
+
+        source_file, line_number = doc_issue_location(method_obj)
+        literal_tokens_present = Array(tokens).any? do |token|
+          literal_entry = literal_entry_from_token(token)
+          literal_entry || literal_hint_token?(token)
+        end
+
+        Array(tokens).each do |token|
+          audit_single_token(token, source_file, line_number, literal_tokens_present)
+        end
+      end
+
+      def audit_single_token(token, source_file, line_number, literal_context)
+        normalized = token.to_s.strip
+        return if normalized.empty?
+
+        if literal_hint_token?(normalized)
+          expand_annotation_token(normalized).each do |entry|
+            audit_literal_entry(entry, source_file, line_number)
+          end
+          return
+        end
+
+        literal_entry = literal_entry_from_token(normalized)
+        if literal_entry
+          return
+        end
+
+        if literal_context && literal_token_candidate?(normalized, include_uppercase: true) && !known_type_token?(normalized)
+          warn_unknown_allowed_value(normalized, source_file, line_number)
+          return
+        end
+
+        if literal_token_candidate?(normalized, include_uppercase: false)
+          warn_unknown_allowed_value(normalized, source_file, line_number)
+          return
+        end
+
+        return if inline_type_hint?(normalized)
+        return if known_type_token?(normalized)
+
+        warn_unknown_type_token(normalized, source_file, line_number)
+      end
+
+      def audit_literal_entry(token, source_file, line_number)
+        literal_entry = literal_entry_from_token(token)
+        return if literal_entry
+
+        warn_unknown_allowed_value(token, source_file, line_number)
       end
 
       def extract_parameter_defaults(method_obj)
@@ -735,6 +804,93 @@ module Rubycli
         nil
       end
 
+      def literal_token_candidate?(token, include_uppercase: false)
+        return false unless token
+
+        stripped = token.strip
+        return false if stripped.empty?
+
+        lowered = stripped.downcase
+        return true if %w[true false nil null ~].include?(lowered)
+        return true if stripped.start_with?(':', '"', "'")
+        return true if stripped.match?(/\A-?\d/)
+
+        pattern = include_uppercase ? /\A[a-z0-9._-]+\z/i : /\A[a-z0-9._-]+\z/
+        stripped.match?(pattern)
+      end
+
+      def warn_unknown_type_token(token, source_file, line_number)
+        return if token.nil? || token.empty?
+
+        suggestions = type_token_suggestions(token)
+        message = "Unknown type token '#{token}'"
+        if suggestions.any?
+          hint = suggestions.first(2).join(' or ')
+          message = "#{message} (did you mean #{hint}?)"
+        end
+        @environment.handle_documentation_issue(message, file: source_file, line: line_number)
+      end
+
+      def warn_unknown_allowed_value(token, source_file, line_number)
+        return if token.nil? || token.empty?
+
+        suggestions = allowed_value_suggestions(token)
+        message = "Unknown allowed value token '#{token}'"
+        if suggestions.any?
+          hint = suggestions.first(2).join(' or ')
+          message = "#{message} (did you mean #{hint}?)"
+        end
+        @environment.handle_documentation_issue(message, file: source_file, line: line_number)
+      end
+
+      def type_token_suggestions(token)
+        dictionary = type_dictionary
+        return [] if dictionary.empty?
+
+        require 'did_you_mean'
+        checker = DidYouMean::SpellChecker.new(dictionary: dictionary)
+        checker.correct(token.to_s).take(3)
+      rescue LoadError, NameError
+        []
+      end
+
+      def allowed_value_suggestions(token)
+        stripped = token.to_s.strip
+        return [] if stripped.empty?
+
+        candidates = []
+        if stripped.match?(/\A[a-z0-9._-]+\z/i)
+          candidates << ":#{stripped.downcase}"
+          candidates << stripped.downcase.inspect
+        end
+        return [] if candidates.empty?
+
+        require 'did_you_mean'
+        checker = DidYouMean::SpellChecker.new(dictionary: candidates)
+        checker.correct(stripped).take(2)
+      rescue LoadError, NameError
+        candidates.first(1)
+      end
+
+      def type_dictionary
+        builtins = (INLINE_TYPE_HINTS + %w[NilClass Fixnum Decimal Struct]).uniq
+        constant_names = []
+        begin
+          ObjectSpace.each_object(Module) do |mod|
+            name = mod.name
+            next unless name && !name.empty?
+
+            constant_names << name
+            parts = name.split('::')
+            constant_names << parts.last if parts.size > 1
+          end
+        rescue StandardError
+          constant_names = Object.constants.map(&:to_s)
+        end
+
+        (builtins + constant_names).map(&:to_s).map(&:strip).reject(&:empty?).uniq
+      end
+
 
       def placeholder_token?(token)
         return false unless token
@@ -786,8 +942,16 @@ module Rubycli
       def known_type_token?(token)
         return false unless token
 
-        candidate = token.start_with?('@') ? token[1..] : token
-        candidate =~ /\A[A-Z][A-Za-z0-9_:<>\[\]]*\z/
+        normalized = normalize_type_token(token)
+        return false if normalized.empty?
+
+        return true if primitive_type_token?(normalized)
+
+        if (inner = array_inner_type_token(normalized))
+          return known_type_token?(inner)
+        end
+
+        !safe_constant_lookup(normalized).nil?
       end
 
       def inline_type_hint?(token)
@@ -803,6 +967,53 @@ module Rubycli
                end
 
         INLINE_TYPE_HINTS.include?(base)
+      end
+
+      def primitive_type_token?(token)
+        return false if token.nil? || token.empty?
+
+        base = token.to_s
+        INLINE_TYPE_HINTS.include?(base) || %w[NilClass Fixnum Decimal Struct].include?(base)
+      end
+
+      def array_inner_type_token(token)
+        return nil unless token
+
+        stripped = token.to_s.strip
+        if stripped.end_with?('[]')
+          stripped[0..-3]
+        elsif stripped.start_with?('Array<') && stripped.end_with?('>')
+          stripped[6..-2].strip
+        else
+          nil
+        end
+      end
+
+      def safe_constant_lookup(name)
+        parts = name.to_s.split('::').reject(&:empty?)
+        return nil if parts.empty?
+
+        context = Object
+        parts.each do |const_name|
+          return nil unless context.const_defined?(const_name, false)
+
+          context = context.const_get(const_name)
+        end
+        context
+      rescue NameError
+        nil
+      end
+
+      def literal_hint_token?(token)
+        return false unless token
+
+        stripped = token.to_s.strip
+        return false if stripped.empty?
+
+        stripped.start_with?('%i[') ||
+          stripped.start_with?('%I[') ||
+          stripped.start_with?('%w[') ||
+          stripped.start_with?('%W[')
       end
 
       def parameter_role(method_obj, keyword)

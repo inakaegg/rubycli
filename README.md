@@ -169,7 +169,7 @@ This keeps large projects safe by default but still provides a one-flag escape h
 
 - **Convenience first** – The goal is to wrap existing Ruby scripts in a CLI with almost no manual plumbing. Fidelity with Python Fire is not a requirement.
 - **Inspired, not a port** – We borrow ideas from Python Fire, but we do not aim for feature parity. Missing Fire features are generally “by design.”
-- **Method definitions first, comments augment behavior** – Public method signatures determine what gets exposed (and which arguments are required), while doc comments like `TAG...` or `[Integer]` can turn the very same CLI value into arrays, integers, booleans, etc. Rubycli also auto-parses inputs that look like JSON/YAML literals (for example `--names='["Alice","Bob"]'`) before enforcing the documented type. Run `rubycli --check path/to/script.rb` to lint documentation mismatches, and pass `--strict` during normal runs when you want invalid input to abort instead of merely warning. (Current limitation: `--check` verifies that comments cover every argument, but it does not yet validate the spelling of type tokens—`Booalean` will be treated as a plain string.)
+- **Method definitions first, comments augment behavior** – Public method signatures determine what gets exposed (and which arguments are required), while doc comments like `TAG...` or `[Integer]` can turn the very same CLI value into arrays, integers, booleans, etc. Rubycli also auto-parses inputs that look like JSON/YAML literals (for example `--names='["Alice","Bob"]'`) before enforcing the documented type. Run `rubycli --check path/to/script.rb` to lint documentation mismatches—including undefined type labels or enumerated values, with DidYouMean suggestions for `Booalean`-style typos—and pass `--strict` during normal runs when you want invalid input to abort instead of merely warning.
 - **Lightweight maintenance** – Much of the implementation was generated with AI assistance; contributions that diverge into deep Ruby metaprogramming are out of scope. Please discuss expectations before opening parity PRs.
 
 ## Features
@@ -184,7 +184,7 @@ This keeps large projects safe by default but still provides a one-flag escape h
 
 - **Comment-aware help** – Rubycli leans on doc comments when present but still reflects the live method signature, keeping code as the ultimate authority.
 - **Type-aware parsing** – Placeholder syntax (`NAME [String]`) and YARD tags let Rubycli coerce arguments to booleans, arrays, numerics, etc. without additional code.
-- **Strict validation** – `rubycli --check` lint runs catch documentation drift before execution, while runtime `--strict` runs turn documented types/choices into enforceable contracts.
+- **Strict validation** – `rubycli --check` lint runs catch documentation drift (including undefined type labels or enumerated values) without executing commands, while runtime `--strict` runs turn those documented types/choices into enforceable contracts.
 - **Ruby-centric tooling** – Supports Ruby-specific conventions such as optional keyword arguments, block documentation (`@yield*` tags), and `RUBYCLI_*` environment toggles.
 
 | Capability | Python Fire | Rubycli |

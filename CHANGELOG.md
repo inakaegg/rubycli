@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+- `rubycli --check` now reports unknown type tokens and enumerated allowed values (with DidYouMean suggestions) instead of silently treating them as strings, while `--strict` continues to enforce the surviving annotations at runtime.
+
 ## [0.1.5] - 2025-11-10
 
 ### Added
