@@ -163,7 +163,7 @@ Rubycli assumes that the file name (CamelCased) matches the class or module you 
 
 This keeps large projects safe by default but still provides a one-flag escape hatch when you prefer the fully automatic behaviour.
 
-> **Instance-only classes** – If a class only defines public *instance* methods (for example, it exposes functionality via `def greet` on the instance), you must run Rubycli with `--new` so the class is instantiated before commands are resolved. Otherwise Rubycli cannot see any CLI-callable methods. Add at least one public class method when you do not want to rely on `--new`.
+> **Instance-only classes** – If a class only defines public *instance* methods (for example, it exposes functionality via `def greet` on the instance), you must run Rubycli with `--new` so the class is instantiated before commands are resolved. Otherwise Rubycli cannot see any CLI-callable methods. Add at least one public class method when you do not want to rely on `--new`. Passing `--new` also makes those instance methods appear in `rubycli --help` output and allows `rubycli --check --new` to lint their documentation.
 
 ## Project Philosophy
 
