@@ -536,7 +536,7 @@ module Rubycli
 
       if defined_constants && !defined_constants.empty?
         sample = defined_constants.first(5)
-        suffix = defined_constants.size > sample.size ? " … (#{defined_constants.size} total)" : ''
+        suffix = defined_constants.size > sample.size ? " ... (#{defined_constants.size} total)" : ''
         lines << "Constants found in this file: #{sample.join(', ')}#{suffix}"
       else
         lines << 'Rubycli could not detect any publicly exposable constants in this file.'

@@ -873,6 +873,8 @@ module Rubycli
       end
 
       def type_dictionary
+        return @type_dictionary if defined?(@type_dictionary) && @type_dictionary
+
         builtins = (INLINE_TYPE_HINTS + %w[NilClass Fixnum Decimal Struct]).uniq
         constant_names = []
         begin
@@ -888,7 +890,11 @@ module Rubycli
           constant_names = Object.constants.map(&:to_s)
         end
 
-        (builtins + constant_names).map(&:to_s).map(&:strip).reject(&:empty?).uniq
+        @type_dictionary = (builtins + constant_names).map(&:to_s).map(&:strip).reject(&:empty?).uniq
+      end
+
+      def reset_type_dictionary_cache!
+        @type_dictionary = nil
       end
 
 

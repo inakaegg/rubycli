@@ -34,6 +34,7 @@ module Rubycli
     def reset!
       @metadata_cache.clear
       @comment_extractor.reset!
+      @parser.reset_type_dictionary_cache! if @parser.respond_to?(:reset_type_dictionary_cache!)
     end
 
     private
