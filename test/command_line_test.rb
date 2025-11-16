@@ -17,7 +17,7 @@ class CommandLineTest < Minitest::Test
 
   def test_parses_flags_and_invokes_runner_with_options
     argv = [
-      '--new',
+      '--new=["alpha"]',
       '--pre-script=instance.new',
       '--json-args',
       'test/fixtures/doc_examples.rb',
@@ -50,6 +50,7 @@ class CommandLineTest < Minitest::Test
     assert_equal 'DocExamples::ConciseSamples', captured[:class_name]
     assert_equal ['describe', 'topic', '--tags', 'alpha,beta'], captured[:cli_args]
     assert_equal true, captured[:options][:new]
+    assert_equal '["alpha"]', captured[:options][:new_args]
     assert_equal true, captured[:options][:json]
     assert_equal false, captured[:options][:eval_args]
     assert_equal false, captured[:options][:eval_lax]

@@ -59,6 +59,7 @@ module Rubycli
         end
       end
 
+      pos_args = convert_positional_arguments(pos_args, method, metadata)
       debug_log "Final parsed - pos_args: #{pos_args.inspect}, kw_args: #{kw_args.inspect}"
       [pos_args, kw_args]
     end
@@ -184,6 +185,60 @@ module Rubycli
       return nil unless key.match?(/\A[a-zA-Z_]\w*\z/)
 
       [key, value]
+    end
+
+    def convert_positional_arguments(pos_args, method, metadata)
+      return pos_args unless method
+
+      positional_map = metadata[:positionals_map] || {}
+      return pos_args if positional_map.empty?
+
+      converted = pos_args.dup
+      method.parameters.each_with_index do |(type, name), index|
+        next unless %i[req opt].include?(type)
+        definition = positional_map[name]
+        next unless definition
+        next if index >= converted.size
+
+        converter = converter_for_definition(definition)
+        next unless converter
+
+        begin
+          converted[index] = converter.call(converted[index])
+        rescue StandardError => e
+          label = definition.label || definition.placeholder || name.to_s.upcase
+          raise ArgumentError, "Value '#{converted[index]}' for #{label} is invalid: #{e.message}"
+        end
+      end
+
+      converted
+    end
+
+    def converter_for_definition(definition)
+      types = Array(definition.types).compact
+      return nil if types.empty?
+
+      types.each do |type|
+        normalized = type.to_s.strip
+        next if normalized.empty?
+
+        if normalized.start_with?('Array<') && normalized.end_with?('>')
+          inner = normalized[6..-2].strip
+          element_converter = converter_for_single_type(inner)
+          return ->(value) { TypeUtils.parse_list(value).map { |item| element_converter ? element_converter.call(item) : item } }
+        elsif normalized.end_with?('[]')
+          inner = normalized[0..-3]
+          element_converter = converter_for_single_type(inner)
+          return ->(value) { TypeUtils.parse_list(value).map { |item| element_converter ? element_converter.call(item) : item } }
+        elsif normalized.casecmp('Array').zero?
+          return ->(value) { TypeUtils.parse_list(value) }
+        else
+          single = converter_for_single_type(normalized)
+          return single if single
+        end
+      end
+
+      nil
     end
 
     def resolve_keyword_parameter(cli_key, kw_param_names)

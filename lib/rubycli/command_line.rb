@@ -3,7 +3,7 @@
 module Rubycli
   module CommandLine
     USAGE = <<~USAGE
-      Usage: rubycli [--new|-n] [--pre-script=<src>] [--json-args|-j | --eval-args|-e | --eval-lax|-E] [--strict] [--check|-c] <target-path> [<class-or-module>] [-- <cli-args>...]
+      Usage: rubycli [--new|-n [<value>]] [--pre-script=<src>] [--json-args|-j | --eval-args|-e | --eval-lax|-E] [--strict] [--check|-c] <target-path> [<class-or-module>] [-- <cli-args>...]
 
       Examples:
         rubycli scripts/sample_runner.rb echo --message hello
@@ -11,7 +11,7 @@ module Rubycli
         rubycli --new lib/akiya_fetcher.rb fetch_simplified_html https://example.com
 
       Options:
-        --new, -n            Instantiate the class/module before invoking CLI commands
+        --new, -n [<value>]  Instantiate the class/module before invoking CLI commands; optional constructor arguments can follow (array/hash recommended; respects --json-args/--eval-args/--eval-lax)
         --pre-script=<src>   Evaluate Ruby code and use its result as the exposed target (--init alias; also accepts space-separated form)
         --json-args, -j      Parse all following arguments strictly as JSON (no YAML literals)
         --eval-args, -e      Evaluate following arguments as Ruby code
@@ -40,6 +40,7 @@ module Rubycli
       end
 
       new_flag = false
+      new_args_expr = nil
       json_mode = false
       eval_mode = false
       eval_lax_mode = false
@@ -55,9 +56,23 @@ module Rubycli
         when '-h', '--help', 'help'
           $stdout.puts(USAGE)
           return 0
-        when '--new', '-n'
+        when /\A--new(?:=(.+))?\z/
+          new_flag = true
+          new_args_expr = Regexp.last_match(1)
+          args.shift
+          if new_args_expr.nil?
+            possible = args.first
+            if possible && !possible.start_with?('-') && likely_new_args_value?(possible)
+              new_args_expr = args.shift
+            end
+          end
+        when '-n'
           new_flag = true
           args.shift
+          possible = args.first
+          if possible && !possible.start_with?('-') && likely_new_args_value?(possible)
+            new_args_expr = args.shift
+          end
         when /\A--pre-script=(.+)\z/, /\A--init=(.+)\z/
           label = Regexp.last_match(0).start_with?('--pre-script') ? '--pre-script' : '--init'
           expr = Regexp.last_match(1)
@@ -141,6 +156,7 @@ module Rubycli
           target_path,
           class_or_module,
           new: new_flag,
+          new_args: new_args_expr,
           pre_scripts: pre_script_sources,
           constant_mode: constant_mode
         )
@@ -151,6 +167,7 @@ module Rubycli
         class_or_module,
         args,
         new: new_flag,
+        new_args: new_args_expr,
         json: json_mode,
         eval_args: eval_mode,
         eval_lax: eval_lax_mode,
@@ -165,6 +182,10 @@ module Rubycli
     rescue Rubycli::Runner::Error => e
       warn "[ERROR] #{e.message}"
       1
+    end
+
+    def likely_new_args_value?(token)
+      token.include?(',') || token.start_with?('[', '{')
     end
   end
 end

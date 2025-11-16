@@ -32,6 +32,48 @@ class RunnerTest < Minitest::Test
     end
   end
 
+  def test_new_args_are_forwarded_to_initializer
+    Dir.mktmpdir do |dir|
+      file = File.join(dir, 'init_runner.rb')
+      File.write(file, <<~RUBY)
+        class InitRunner
+          attr_reader :args, :kwargs
+
+          def initialize(*args, **kwargs)
+            @args = args
+            @kwargs = kwargs
+          end
+
+          def run
+            { args: args, kwargs: kwargs }
+          end
+        end
+      RUBY
+
+      kw_instance = nil
+      Rubycli.stub(:run, ->(target, *_args) { kw_instance = target }) do
+        Rubycli::Runner.execute(file, nil, ['run'], new: true, new_args: '{"label":"alpha"}')
+      end
+
+      refute_nil kw_instance
+      assert_instance_of InitRunner, kw_instance
+      assert_equal [], kw_instance.args
+      assert_equal({ label: 'alpha' }, kw_instance.kwargs)
+
+      pos_instance = nil
+      Rubycli.stub(:run, ->(target, *_args) { pos_instance = target }) do
+        Rubycli::Runner.execute(file, nil, ['run'], new: true, new_args: '["alpha", 2]')
+      end
+
+      refute_nil pos_instance
+      assert_instance_of InitRunner, pos_instance
+      assert_equal ['alpha', 2], pos_instance.args
+      assert_equal({}, pos_instance.kwargs)
+    ensure
+      Object.send(:remove_const, :InitRunner) if Object.const_defined?(:InitRunner)
+    end
+  end
+
   def test_auto_mode_selects_single_constant_when_names_differ
     Dir.mktmpdir do |dir|
       file = File.join(dir, 'cli_entry.rb')
@@ -141,6 +183,132 @@ class RunnerTest < Minitest::Test
       assert_instance_of InstanceRunner, captured
     ensure
       Object.send(:remove_const, :InstanceRunner) if Object.const_defined?(:InstanceRunner)
+    end
+  end
+
+  def test_new_args_use_metadata_and_type_conversion
+    Dir.mktmpdir do |dir|
+      file = File.join(dir, 'init_typed_runner.rb')
+      File.write(file, <<~RUBY)
+        class InitTypedRunner
+          attr_reader :items, :flag
+
+          # @param items [String[]]
+          # @param flag [Boolean]
+          def initialize(items, flag: false)
+            @items = items
+            @flag = flag
+          end
+
+          def run
+            { items: items, flag: flag }
+          end
+        end
+      RUBY
+
+      captured = nil
+      Rubycli.stub(:run, ->(target, *_args) { captured = target }) do
+        Rubycli::Runner.execute(file, nil, ['run'], new: true, new_args: 'foo,bar', constant_mode: :strict)
+      end
+
+      assert_instance_of InitTypedRunner, captured
+      assert_equal %w[foo bar], captured.items
+      assert_equal false, captured.flag
+    ensure
+      Object.send(:remove_const, :InitTypedRunner) if Object.const_defined?(:InitTypedRunner)
+    end
+  end
+
+  def test_positional_array_conversion
+    Dir.mktmpdir do |dir|
+      file = File.join(dir, 'positional_runner.rb')
+      File.write(file, <<~RUBY)
+        class PositionalRunner
+          # values [Integer[]]
+          def self.sum(values)
+            values.inject(0, :+)
+          end
+        end
+      RUBY
+
+      result = nil
+      Rubycli.stub(:call_target, ->(_method_obj, pos_args, _kw_args) { result = pos_args }) do
+        Rubycli::Runner.execute(file, nil, ['sum', '1,2,3'], constant_mode: :strict)
+      end
+
+      assert_equal [[1, 2, 3]], result
+    ensure
+      Object.send(:remove_const, :PositionalRunner) if Object.const_defined?(:PositionalRunner)
+    end
+  end
+
+  def test_positional_hash_and_boolean_conversion_and_strict
+    Dir.mktmpdir do |dir|
+      file = File.join(dir, 'positional_hash_runner.rb')
+      File.write(file, <<~RUBY)
+        class PositionalHashRunner
+          # config [Hash]
+          # flag [Boolean]
+          def self.combine(config, flag)
+            [config, flag]
+          end
+        end
+      RUBY
+
+      result = nil
+      Rubycli.stub(:call_target, ->(_method_obj, pos_args, _kw_args) { result = pos_args }) do
+        Rubycli::Runner.execute(file, nil, ['combine', '{foo: 1}', 'true'], constant_mode: :strict)
+      end
+
+      assert_equal([{ 'foo' => 1 }, true], result)
+
+      assert_raises(Rubycli::ArgumentError) do
+        Rubycli::Runner.execute(file, nil, ['combine', 'not-a-hash', 'maybe'], constant_mode: :strict, json: false)
+      end
+    ensure
+      Object.send(:remove_const, :PositionalHashRunner) if Object.const_defined?(:PositionalHashRunner)
+    end
+  end
+
+  def test_new_args_with_hash_and_modes_and_spacing
+    Dir.mktmpdir do |dir|
+      file = File.join(dir, 'init_hash_runner.rb')
+      File.write(file, <<~RUBY)
+        class InitHashRunner
+          attr_reader :opts
+
+          # @param opts [Hash]
+          def initialize(opts = {})
+            @opts = opts
+          end
+
+          def run
+            opts
+          end
+        end
+      RUBY
+
+      captured = nil
+      Rubycli.stub(:run, ->(target, *_args) { captured = target }) do
+        Rubycli::Runner.execute(file, nil, ['run'], new: true, new_args: '--{"a":1}', eval_args: false, json: true, constant_mode: :strict)
+      end
+      assert_instance_of InitHashRunner, captured
+      assert_equal({ 'a' => 1 }, captured.opts)
+
+      captured = nil
+      Rubycli.stub(:run, ->(target, *_args) { captured = target }) do
+        Rubycli::Runner.execute(file, nil, ['run'], new: true, new_args: '{b: 2}', eval_args: true, constant_mode: :strict)
+      end
+      assert_equal({ b: 2 }, captured.opts)
+
+      # Space-separated single token that is not obviously structured should be ignored as new args
+      captured_args = nil
+      Rubycli.stub(:instantiate_target, ->(klass, init_args = nil) { captured_args = init_args; klass.new }) do
+        Rubycli::Runner.execute(file, nil, ['run'], new: true, new_args: nil, constant_mode: :strict)
+      end
+      assert_equal [[], {}], captured_args
+    ensure
+      Object.send(:remove_const, :InitHashRunner) if Object.const_defined?(:InitHashRunner)
     end
   end
 

@@ -1,5 +1,16 @@
 # Changelog
 
+# Changelog
+
+## [0.1.7] - 2025-11-12
+
+### Added
+- `--new` now optionally accepts constructor arguments inline (e.g., `--new=[...]`); YAML/JSON-like literals are safely parsed, and `--json-args` / `--eval-args` / `--eval-lax` still apply. Arrays become positional args, hashes become keyword args.
+- Positional argument coercion now runs through the same type-conversion pipeline as options/`--new`, including comment-driven array/element coercion and strict-mode validation; new tests cover arrays, hashes, booleans, and `--new` with JSON/eval modes.
+
+### Changed
+- `--new` arguments now flow through the same type-coercion pipeline as regular CLI arguments (including comment-driven type hints) before being passed to `initialize`.
+
 ## [0.1.6] - 2025-11-11
 
 ### Changed

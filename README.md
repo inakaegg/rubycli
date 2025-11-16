@@ -163,7 +163,9 @@ Rubycli assumes that the file name (CamelCased) matches the class or module you 
 
 This keeps large projects safe by default but still provides a one-flag escape hatch when you prefer the fully automatic behaviour.
 
-> **Instance-only classes** – If a class only defines public *instance* methods (for example, it exposes functionality via `def greet` on the instance), you must run Rubycli with `--new` so the class is instantiated before commands are resolved. Otherwise Rubycli cannot see any CLI-callable methods. Add at least one public class method when you do not want to rely on `--new`. Passing `--new` also makes those instance methods appear in `rubycli --help` output and allows `rubycli --check --new` to lint their documentation.
+> **Instance-only classes** – If a class only defines public *instance* methods (for example, it exposes functionality via `def greet` on the instance), you must run Rubycli with `--new` so the class is instantiated before commands are resolved. Otherwise Rubycli cannot see any CLI-callable methods. Add at least one public class method when you do not want to rely on `--new`. Passing `--new` also makes those instance methods appear in `rubycli --help` output and allows `rubycli --check --new` to lint their documentation. When your constructor needs arguments, pass them inline with `--new=[...]` (YAML/JSON-like literals are safely parsed; plain strings stay as-is; `--json-args` forces strict JSON, and `--eval-args` / `--eval-lax` switch to Ruby literals). Any comments on `initialize` are respected for type coercion just like regular CLI methods.
+
+> Hint: When passing a constructor argument with `--new`, prefer `--new=value` so it isn’t mistaken for the next path/command. Structured values (arrays/hashes, etc.) should be written explicitly, e.g., `--new=[...]` or `--new={...}`. Space-separated single tokens like `--new 1` may be treated as the following path unless they look obviously structured.
 
 ## Project Philosophy
 
@@ -192,7 +194,7 @@ This keeps large projects safe by default but still provides a one-flag escape h
 | Capability | Python Fire | Rubycli |
 | ---------- | ----------- | -------- |
 | Attribute traversal | Recursively exposes attributes/properties on demand | Exposes public methods defined on the target; no implicit traversal |
-| Constructor handling | Automatically prompts for `__init__` args when instantiating classes | `--new` simply instantiates without passing CLI args (use pre-scripts or your own factories if you need injected dependencies) |
+| Constructor handling | Automatically prompts for `__init__` args when instantiating classes | `--new` instantiates and may take inline constructor arguments (YAML/JSON-like literals are parsed safely; raw strings stay as-is). Use pre-scripts or your own factories for more complex wiring. |
 | Interactive shell | Offers Fire-specific REPL when invoked without command | No interactive shell mode; strictly command execution |
 | Input discovery | Pure reflection, no doc comments required | Doc comments drive option names, placeholders, and validation |
 | Data structures | Dictionaries / lists become subcommands by default | Focused on class or module methods; no automatic dict/list expansion |

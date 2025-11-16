@@ -209,6 +209,7 @@ module Rubycli
       class_name = nil,
       cli_args = nil,
       new: false,
+      new_args: nil,
       json: false,
       eval_args: false,
       eval_lax: false,
@@ -224,6 +225,10 @@ module Rubycli
         target_path,
         class_name,
         new: new,
+        new_args: new_args,
+        json_mode: json,
+        eval_mode: eval_args,
+        eval_lax: eval_lax,
         pre_scripts: pre_scripts,
         constant_mode: constant_mode
       )
@@ -243,8 +248,12 @@ module Rubycli
       target_path,
       class_name = nil,
       new: false,
+      new_args: nil,
       pre_scripts: [],
-      constant_mode: nil
+      constant_mode: nil,
+      json_mode: false,
+      eval_mode: false,
+      eval_lax: false
     )
       raise ArgumentError, 'target_path must be specified' if target_path.nil? || target_path.empty?
       previous_doc_check = Rubycli.environment.doc_check_mode?
@@ -255,6 +264,10 @@ module Rubycli
         target_path,
         class_name,
         new: new,
+        new_args: new_args,
+        json_mode: json_mode,
+        eval_mode: eval_mode,
+        eval_lax: eval_lax,
         pre_scripts: pre_scripts,
         constant_mode: constant_mode
       )
@@ -348,10 +361,18 @@ module Rubycli
       raise Error.new(message), cause: nil
     end
 
-    def instantiate_target(target)
+    def instantiate_target(target, initializer_args = nil)
+      positional_args, keyword_args = Array(initializer_args || [[], {}])
+      positional_args ||= []
+      keyword_args ||= {}
+
       case target
       when Class
-        target.new
+        if keyword_args.empty?
+          target.new(*positional_args)
+        else
+          target.new(*positional_args, **keyword_args)
+        end
       when Module
         Object.new.extend(target)
       else
@@ -373,10 +394,43 @@ module Rubycli
       end
     end
 
+    def parse_initializer_arguments(raw_value, target, json_mode:, eval_mode:, eval_lax:)
+      return [[], {}] if raw_value.nil?
+      raise Rubycli::ArgumentError, '--json-args cannot be combined with --eval-args or --eval-lax' if json_mode && eval_mode
+
+      initializer_method = initializer_method_for(target)
+      tokens = Array(raw_value)
+
+      positional_args = []
+      keyword_args = {}
+
+      Rubycli.argument_mode_controller.with_json_mode(json_mode) do
+        Rubycli.argument_mode_controller.with_eval_mode(eval_mode, lax: eval_lax) do
+          positional_args, keyword_args = Rubycli.argument_parser.parse(tokens.dup, initializer_method)
+          Rubycli.apply_argument_coercions(positional_args, keyword_args)
+          Rubycli.argument_parser.validate_inputs(initializer_method, positional_args, keyword_args)
+        end
+      end
+
+      [positional_args || [], keyword_args || {}]
+    rescue Rubycli::ArgumentError => e
+      raise Runner::Error, "Failed to parse --new arguments: #{e.message}"
+    end
+
+    def initializer_method_for(target)
+      return nil unless target.is_a?(Class)
+
+      target.instance_method(:initialize) rescue nil
+    end
+
     def prepare_runner_target(
       target_path,
       class_name,
       new: false,
+      new_args: nil,
+      json_mode: false,
+      eval_mode: false,
+      eval_lax: false,
       pre_scripts: [],
       constant_mode: nil
     )
@@ -403,7 +457,9 @@ module Rubycli
                  )
                end
 
-      runner_target = new ? instantiate_target(target) : target
+      initializer_args = new ? parse_initializer_arguments(new_args, target, json_mode: json_mode, eval_mode: eval_mode, eval_lax: eval_lax) : nil
+
+      runner_target = new ? instantiate_target(target, initializer_args) : target
       runner_target = apply_pre_scripts(pre_scripts, target, runner_target)
       [runner_target, full_path]
     end
