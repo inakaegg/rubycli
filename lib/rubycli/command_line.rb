@@ -3,12 +3,13 @@
 module Rubycli
   module CommandLine
     USAGE = <<~USAGE
-      Usage: rubycli [--new|-n [<value>]] [--pre-script=<src>] [--json-args|-j | --eval-args|-e | --eval-lax|-E] [--strict] [--check|-c] <target-path> [<class-or-module>] [-- <cli-args>...]
+      Usage: rubycli [--new|-n[=<value>]] [--pre-script=<src>] [--json-args|-j | --eval-args|-e | --eval-lax|-E] [--strict] [--check|-c] <target-path> [<class-or-module>] [-- <cli-args>...]
 
       Examples:
         rubycli scripts/sample_runner.rb echo --message hello
         rubycli scripts/sample_runner.rb AlternateRunner greet --name Ruby
         rubycli --new lib/akiya_fetcher.rb fetch_simplified_html https://example.com
+        rubycli --json-args --new='["a","b"]' examples/new_mode_runner.rb run --mode summary --options '{"source":"json"}'
 
       Options:
         --new, -n [<value>]  Instantiate the class/module before invoking CLI commands; optional constructor arguments can follow (array/hash recommended; respects --json-args/--eval-args/--eval-lax)

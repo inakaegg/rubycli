@@ -156,9 +156,9 @@ Rubycli は「ファイル名を CamelCase にした定数」を公開対象だ�
 
 大規模なコードベースでも安全側を保ちながら、どうしても自動選択したいときだけ 1 フラグで切り替えられます。
 
-> **インスタンスメソッド専用のクラスについて** – 公開メソッドがインスタンス側（`def greet` など）にしか無い場合は、`--new` を付けて事前にインスタンス化しないと CLI から呼び出せません。クラスメソッドを 1 つ用意するか、`--new` を明示して実行してください。`--new` を付ければ `rubycli --help` でもインスタンスメソッドが一覧に現れ、`rubycli --check --new` でコメントの lint も実行できます。初期化時に引数が必要なら `--new=[...]` のように続けて指定できます（YAML/JSON らしいリテラルは安全にパース、プレーン文字列はそのまま。`--json-args` で厳格 JSON、`--eval-args` / `--eval-lax` で Ruby リテラル指定も可能）。`initialize` に書いたコメントも通常の CLI メソッドと同様に型変換に反映されます。
+> **インスタンスメソッド専用のクラスについて** – 公開メソッドがインスタンス側（`def greet` など）にしか無い場合は、`--new` を付けて事前にインスタンス化しないと CLI から呼び出せません。クラスメソッドを 1 つ用意するか、`--new` を明示して実行してください。`--new` を付ければ `rubycli --help` でもインスタンスメソッドが一覧に現れ、`rubycli --check --new` でコメントの lint も実行できます。初期化時に引数が必要なら `--new=VALUE` のように続けて指定できます（通常の引数と同様に YAML/JSON ライクな安全パースに加え、`--json-args` / `--eval-args` / `--eval-lax` も適用可能）。`initialize` に書いたコメントも通常の CLI メソッドと同様に型変換に反映されます。
 
-> 補足: `--new 1` のようにスペース区切りで 1 つだけ値を渡すと、後続トークンがパス扱いされやすいため `--new=VALUE` のように `=` 付きで指定するのが確実です。構造化した値（配列やハッシュなど）を渡す場合も `--new=[...]` / `--new={...}` のように明示してください。
+> 補足: `--new 1` のようにスペース区切りで 1 つだけ値を渡すと、後続トークンがパス扱いされやすいため `--new=VALUE` のように `=` 付きで指定するのが確実です。
 
 ## 開発方針
 
@@ -174,6 +174,21 @@ Rubycli は「ファイル名を CamelCase にした定数」を公開対象だ�
 - 引数はデフォルトで安全なリテラルとして解釈し、必要に応じて厳格 JSON モードや Ruby eval モードを切り替え可能
 - `--pre-script`（エイリアス: `--init`）で任意の Ruby コードを評価し、その結果オブジェクトを公開
 - `--check` でコメント整合性を lint、`--strict` で入力値をドキュメント通りに強制する二段構えのガード
+- `examples/new_mode_runner.rb` ではインスタンス専用クラスを `--new=VALUE` で初期化し、eval/JSON モードや pre-script を組み合わせる例を示しています。
+
+### サンプル / 付属例
+
+- `examples/hello_app.rb` / `examples/hello_app_with_docs.rb`: 最小のモジュール関数とドキュメント付きの版
+- `examples/typed_arguments_demo.rb`: 標準ライブラリ型 (Date/Time/BigDecimal/Pathname) の coercion
+- `examples/strict_choices_demo.rb`: リテラル列挙と `--strict` の組み合わせ
+- `examples/new_mode_runner.rb`: インスタンス専用クラスを `--new=VALUE` で初期化し、eval/JSON/pre-script を組み合わせる例
+
+#### サンプルコマンド
+
+- `rubycli examples/new_mode_runner.rb run --new='["a","b","c"]' --mode reverse`
+- `rubycli --json-args --new='["x","y"]' examples/new_mode_runner.rb run --mode summary --options '{"source":"json"}'`
+- `rubycli --eval-args --new='["x","y"]' examples/new_mode_runner.rb run --mode summary --options '{tags: [:a, :b]}'`
+- `rubycli --pre-script 'NewModeRunner.new(%w[a b c], options: {from: :pre})' examples/new_mode_runner.rb run --mode summary`
 
 > 補足: `--strict` はコメントに書かれた型／許可値をそのまま信頼して検証するため、コメントが誤記だと実行時には検出できません。CI では必ず `rubycli --check` を走らせ、`--strict` は「 lint を通過したドキュメントを本番で厳密に守る」用途に使ってください。
 
@@ -187,7 +202,7 @@ Rubycli は「ファイル名を CamelCase にした定数」を公開対象だ�
 | 機能 | Python Fire | Rubycli |
 | ---- | ----------- | -------- |
 | 属性の辿り方 | オブジェクトを辿ってプロパティ/属性を自動公開 | 対象オブジェクトの公開メソッドをそのまま公開（暗黙の辿りは無し） |
-| クラス初期化 | `__init__` 引数を CLI で自動受け取りインスタンス化 | `--new` 指定時だけ初期化（コンストラクタ引数は `--new=[...]` で渡せる。YAML/JSON らしいリテラルは安全にパース、素の文字列はそのまま。より複雑なら pre-script や自前ファクトリを利用） |
+| クラス初期化 | `__init__` 引数を CLI で自動受け取りインスタンス化 | `--new` 指定時だけ初期化（コンストラクタ引数は `--new=VALUE` で渡せる。YAML/JSON らしいリテラルは安全にパース、`--json-args` / `--eval-args` / `--eval-lax` も適用可能。より複雑なら pre-script や自前ファクトリを利用） |
 | インタラクティブシェル | コマンド未指定時に Fire REPL を提供 | インタラクティブモード無し。コマンド実行専用 |
 | 情報源 | 反射で引数・プロパティを解析 | ライブなメソッド定義を基点にしつつコメントをヘルプへ反映 |
 | 辞書/配列 | dict/list を自動でサブコマンド化 | クラス/モジュールのメソッドに特化（辞書自動展開なし） |
