@@ -583,7 +583,11 @@ module Rubycli
         require 'time'
         ->(value) { Time.parse(value) }
       when 'JSON', 'Hash'
-        ->(value) { JSON.parse(value) }
+        ->(value) {
+          return value if value.is_a?(Hash)
+
+          JSON.parse(value)
+        }
       when 'Pathname'
         require 'pathname'
         ->(value) {
