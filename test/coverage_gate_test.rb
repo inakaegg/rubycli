@@ -53,4 +53,17 @@ class CoverageGateTest < Minitest::Test
     assert_equal 3, stats.total
     assert_equal [['lib/example.rb', 3]], stats.uncovered
   end
+
+  def test_coverage_stats_treat_unloaded_changed_files_as_uncovered
+    changed_lines = { 'lib/unloaded.rb' => [1, 2] }
+
+    stats = CoverageGate.coverage_stats(changed_lines, {})
+
+    assert_equal 0, stats.covered
+    assert_equal 2, stats.total
+    assert_equal(
+      [['lib/unloaded.rb', 1], ['lib/unloaded.rb', 2]],
+      stats.uncovered
+    )
+  end
 end

@@ -5,7 +5,9 @@
 ### Fixed
 - Parameterless commands now reject unexpected arguments without invoking the target method or attempting implicit return-value traversal.
 - Required options now report a missing value instead of consuming the following option token, while explicit values such as `true` remain valid.
+- Required options accept negative exponent notation such as `-1e3` without mistaking it for another option.
 - Constant discovery now includes classes and modules assigned with `Class.new` / `Module.new` during the target file load.
+- Repeated loads retain assigned constant aliases when the source file is unchanged.
 - Constructor arity errors raised by `--new` are now wrapped in Rubycli's user-facing runner error.
 - Positional type conversion now waits for JSON/eval coercion, matching keyword-option behavior and preserving `--new` JSON/eval inputs.
 - Runner tests now execute without terminating the Minitest process and assert converted command arguments instead of stubbed targets.
@@ -13,6 +15,7 @@
 - Explicit nested constant names no longer fall back to inherited top-level constants, and malformed pre-scripts now produce contextual Rubycli errors.
 - Rest, optional-before-required, and trailing-required positional arguments now follow Ruby's argument binding rules for conversion, validation, and help output.
 - Documented scalar/list conversions now preserve numeric-looking strings, handle repeated booleans, return real `DateTime` values, accept JSON arrays, and reject scalar/array values where `JSON`/`Hash` shapes do not allow them.
+- Positional `Symbol` annotations preserve colon-prefixed symbol literals instead of embedding the colon in the symbol name.
 - Assignment-like positional values remain positional unless they match a keyword, while matching assignments use the same documented conversion as long options.
 - YARD positional tags are aligned by parameter name instead of comment order.
 - Eval-mode local variables and command-line strict/check/result-output flags no longer leak across separate programmatic runs.
@@ -21,6 +24,7 @@
 
 ### Testing
 - Added dependency-free overall line, branch, and changed-line coverage gates plus GitHub Actions checks spanning the supported Ruby range.
+- Changed-line coverage now treats new library files that were never loaded by the test suite as uncovered.
 
 ## [0.1.7] - 2025-11-12
 

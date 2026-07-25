@@ -60,6 +60,29 @@ class ConstantCaptureTest < Minitest::Test
     end
   end
 
+  def test_records_assigned_alias_when_same_file_is_loaded_twice
+    capture = Rubycli::ConstantCapture.new
+    Tempfile.create(['assigned_alias', '.rb']) do |file|
+      file.write(<<~RUBY)
+        module CaptureAliasSource
+          def self.run; end
+        end
+        CaptureAssignedAlias = CaptureAliasSource
+      RUBY
+      file.flush
+
+      2.times do
+        capture_io do
+          capture.capture(file.path) { load file.path }
+        end
+        assert_includes capture.constants_for(file.path), 'CaptureAssignedAlias'
+      end
+    ensure
+      cleanup_constant(:CaptureAssignedAlias)
+      cleanup_constant(:CaptureAliasSource)
+    end
+  end
+
   private
 
   def cleanup_constant(name)

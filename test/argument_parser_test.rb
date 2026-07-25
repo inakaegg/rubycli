@@ -395,6 +395,15 @@ class ArgumentParserTest < Minitest::Test
     assert_silent { @parser.validate_inputs(method, pos_args, kw_args) }
   end
 
+  def test_required_option_accepts_negative_exponent_value
+    method = StdTypeSamples.method(:ingest)
+
+    pos_args, kw_args = @parser.parse(['--budget', '-1e3'], method)
+
+    assert_empty pos_args
+    assert_equal BigDecimal('-1e3'), kw_args[:budget]
+  end
+
   def test_json_type_accepts_an_array_literal
     method = JsonTypeSamples.method(:accept)
 
@@ -443,6 +452,15 @@ class ArgumentParserTest < Minitest::Test
     pos_args, kw_args = @parser.parse(['123'], method)
 
     assert_equal [:"123"], pos_args
+    assert_empty kw_args
+  end
+
+  def test_symbol_annotation_preserves_symbol_literal_value
+    method = ScalarTypeSamples.method(:symbol)
+
+    pos_args, kw_args = @parser.parse([':foo'], method)
+
+    assert_equal [:foo], pos_args
     assert_empty kw_args
   end
 

@@ -49,7 +49,11 @@ module CoverageGate
 
     changed_lines_by_path.each do |path, line_numbers|
       line_hits = line_hits_by_path[path]
-      next unless line_hits
+      unless line_hits
+        total += line_numbers.size
+        uncovered.concat(line_numbers.map { |line_number| [path, line_number] })
+        next
+      end
 
       line_numbers.each do |line_number|
         hits = line_hits[line_number - 1]

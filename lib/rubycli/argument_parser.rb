@@ -687,7 +687,10 @@ module Rubycli
       when 'Boolean', 'TrueClass', 'FalseClass'
         ->(value) { TypeUtils.convert_boolean(value) }
       when 'Symbol'
-        ->(value) { value.to_sym }
+        ->(value) {
+          converted_value = convert_arg(value)
+          converted_value.is_a?(Symbol) ? converted_value : value.to_sym
+        }
       when 'BigDecimal', 'Decimal'
         require 'bigdecimal'
         ->(value) {
@@ -781,7 +784,9 @@ module Rubycli
       return false unless token
       return false if token == '--'
 
-      token.start_with?('-') && !(token =~ /\A-?\d+(\.\d+)?\z/)
+      token.start_with?('-') && !token.match?(
+        /\A-(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?\z/
+      )
     end
   end
 end

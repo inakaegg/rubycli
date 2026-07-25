@@ -1,14 +1,23 @@
 # frozen_string_literal: true
 
+require 'digest'
+
 module Rubycli
   # Observes constants defined while loading a file.
   class ConstantCapture
     def initialize
       @captured = Hash.new { |hash, key| hash[key] = [] }
+      @source_fingerprints = {}
     end
 
     def capture(file)
       normalized_file = normalize(file)
+      source_fingerprint = Digest::SHA256.file(normalized_file).hexdigest
+      previous_names = if @source_fingerprints[normalized_file] == source_fingerprint
+                         @captured[normalized_file].dup
+                       else
+                         []
+                       end
       @captured[normalized_file] = []
       before_snapshot = constant_snapshot(normalized_file)
       trace = TracePoint.new(:class) do |tp|
@@ -30,7 +39,9 @@ module Rubycli
         changed_names = after_snapshot.keys.select do |name|
           before_snapshot[name] != after_snapshot[name]
         end
-        @captured[normalized_file].concat(changed_names)
+        retained_names = previous_names.select { |name| after_snapshot.key?(name) }
+        @captured[normalized_file].concat(changed_names).concat(retained_names)
+        @source_fingerprints[normalized_file] = source_fingerprint
       end
     end
 
