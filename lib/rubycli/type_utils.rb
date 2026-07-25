@@ -76,7 +76,7 @@ module Rubycli
         working = working.map do |type|
           next type if type.nil? || type.empty?
 
-          if boolean_type?(type) || nil_type?(type)
+          if (boolean_type?(type) && placeholder_info[:optional]) || nil_type?(type)
             type
           elsif type.end_with?('[]') || type.start_with?('Array<') || type.casecmp('Array').zero?
             array_type_present = true

@@ -4,6 +4,58 @@ require 'test_helper'
 require 'tmpdir'
 
 class RunnerTest < Minitest::Test
+  def test_execute_rejects_json_and_eval_modes_before_loading_target
+    error = assert_raises(Rubycli::Runner::Error) do
+      Rubycli::Runner.execute('missing-target.rb', json: true, eval_args: true)
+    end
+
+    assert_includes error.message, '--json-args cannot be combined'
+    refute_includes error.message, 'File not found'
+  end
+
+  def test_instantiate_target_supports_keyword_constructor_arguments
+    target = Class.new do
+      attr_reader :name
+
+      def initialize(name:)
+        @name = name
+      end
+    end
+
+    instance = Rubycli::Runner.instantiate_target(target, [[], { name: 'Ruby' }])
+
+    assert_instance_of target, instance
+    assert_equal 'Ruby', instance.name
+  end
+
+  def test_instantiate_target_extends_modules_and_preserves_plain_objects
+    extension = Module.new do
+      def greeting
+        'hello'
+      end
+    end
+    plain_target = Object.new
+
+    extended = Rubycli::Runner.instantiate_target(extension)
+
+    assert_equal 'hello', extended.greeting
+    assert_same plain_target, Rubycli::Runner.instantiate_target(plain_target)
+  end
+
+  def test_find_target_path_adds_rb_extension_and_reports_missing_file
+    Dir.mktmpdir do |dir|
+      path_without_extension = File.join(dir, 'extension_runner')
+      File.write("#{path_without_extension}.rb", "# runner\n")
+
+      assert_equal "#{path_without_extension}.rb", Rubycli::Runner.find_target_path(path_without_extension)
+
+      error = assert_raises(Rubycli::Runner::Error) do
+        Rubycli::Runner.find_target_path(File.join(dir, 'missing'))
+      end
+      assert_includes error.message, 'File not found'
+    end
+  end
+
   def test_execute_infers_constant_and_instantiates_when_new_flag
     Dir.mktmpdir do |dir|
       file = File.join(dir, 'sample_runner.rb')
@@ -74,6 +126,33 @@ class RunnerTest < Minitest::Test
     end
   end
 
+  def test_initializer_argument_error_is_wrapped_as_runner_error
+    target = Class.new do
+      def initialize(required); end
+    end
+
+    error = assert_raises(Rubycli::Runner::Error) do
+      Rubycli::Runner.instantiate_target(target)
+    end
+
+    assert_includes error.message, 'Failed to instantiate target'
+    assert_includes error.message, 'wrong number of arguments'
+  end
+
+  def test_framework_argument_error_from_initializer_is_wrapped_as_runner_error
+    target = Class.new do
+      def initialize
+        raise Rubycli::ArgumentError, 'invalid constructor value'
+      end
+    end
+
+    error = assert_raises(Rubycli::Runner::Error) do
+      Rubycli::Runner.instantiate_target(target)
+    end
+
+    assert_equal 'Failed to instantiate target: invalid constructor value', error.message
+  end
+
   def test_auto_mode_selects_single_constant_when_names_differ
     Dir.mktmpdir do |dir|
       file = File.join(dir, 'cli_entry.rb')
@@ -121,6 +200,20 @@ class RunnerTest < Minitest::Test
     assert_match(/Failed to evaluate pre-script/, error.message)
   end
 
+  def test_pre_script_syntax_error_is_wrapped_with_source_context
+    error = assert_raises(Rubycli::Runner::PreScriptError) do
+      Rubycli::Runner.apply_pre_scripts(
+        [{ value: '{', context: '(inline --pre-script)' }],
+        Object,
+        Object
+      )
+    end
+
+    assert_includes error.message, 'Failed to evaluate pre-script'
+    assert_includes error.message, '(inline --pre-script)'
+    assert_includes error.message, 'syntax error'
+  end
+
   def test_strict_mode_requires_explicit_constant_when_names_differ
     Dir.mktmpdir do |dir|
       file = File.join(dir, 'cli_entry.rb')
@@ -139,6 +232,35 @@ class RunnerTest < Minitest::Test
     ensure
       Object.send(:remove_const, :TracePointCapturedRunner) if Object.const_defined?(:TracePointCapturedRunner)
     end
+  end
+
+  def test_explicit_nested_constant_does_not_fall_back_to_ancestor
+    Object.const_set(:InheritedPayload, Class.new)
+
+    Dir.mktmpdir do |dir|
+      file = File.join(dir, 'explicit_constant_host.rb')
+      File.write(file, <<~RUBY)
+        class ExplicitConstantHost
+          def self.run
+            :host
+          end
+        end
+      RUBY
+
+      error = assert_raises(Rubycli::Runner::Error) do
+        Rubycli::Runner.prepare_runner_target(
+          file,
+          'ExplicitConstantHost::InheritedPayload',
+          constant_mode: :strict
+        )
+      end
+
+      assert_includes error.message, 'ExplicitConstantHost::InheritedPayload'
+    ensure
+      Object.send(:remove_const, :ExplicitConstantHost) if Object.const_defined?(:ExplicitConstantHost, false)
+    end
+  ensure
+    Object.send(:remove_const, :InheritedPayload) if Object.const_defined?(:InheritedPayload, false)
   end
 
   def test_error_when_matching_constant_has_no_cli_methods
@@ -253,8 +375,11 @@ class RunnerTest < Minitest::Test
       RUBY
 
       parsed = nil
-      Rubycli.stub(:call_target, ->(_method, pos_args, kw_args) { parsed = { pos: pos_args, kw: kw_args } }) do
-        Rubycli::Runner.execute(file, nil, ['combine', '{"foo":1}', 'true'], constant_mode: :strict, eval_args: false, json: true, new: false)
+      run_without_exit = ->(target, *_args) { Rubycli.cli.run(target, ARGV.dup, false) }
+      Rubycli.stub(:run, run_without_exit) do
+        Rubycli.stub(:call_target, ->(_method, pos_args, kw_args) { parsed = { pos: pos_args, kw: kw_args }; nil }) do
+          Rubycli::Runner.execute(file, nil, ['combine', '{"foo":1}', 'true'], constant_mode: :strict, eval_args: false, json: true, new: false)
+        end
       end
       assert_equal([{ 'foo' => 1 }, true], parsed[:pos])
       assert_equal({}, parsed[:kw])
@@ -262,9 +387,22 @@ class RunnerTest < Minitest::Test
       previous_strict = Rubycli.environment.strict_input?
       begin
         Rubycli.environment.enable_strict_input!
-        assert_raises(Rubycli::ArgumentError) do
-          Rubycli::Runner.execute(file, nil, ['combine', 'not-a-hash', 'maybe'], constant_mode: :strict, eval_args: false, json: true, new: false)
+        status = nil
+        _out, err = capture_io do
+          Rubycli.stub(:run, run_without_exit) do
+            status = Rubycli::Runner.execute(
+              file,
+              nil,
+              ['combine', '"not-a-hash"', '"maybe"'],
+              constant_mode: :strict,
+              eval_args: false,
+              json: true,
+              new: false
+            )
+          end
         end
+        assert_equal 1, status
+        assert_includes err, 'CONFIG must be Hash'
       ensure
         Rubycli.environment.instance_variable_set(:@strict_input, previous_strict)
       end
@@ -302,7 +440,7 @@ class RunnerTest < Minitest::Test
       Rubycli.stub(:run, ->(target, *_args) { captured = target }) do
         Rubycli::Runner.execute(file, nil, ['run'], new: true, new_args: '{"b":2}', eval_args: true, constant_mode: :strict)
       end
-      assert_equal({ 'b' => 2 }, captured.opts)
+      assert_equal({ b: 2 }, captured.opts)
 
       error = assert_raises(Rubycli::Runner::Error) do
         Rubycli::Runner.execute(file, nil, ['run'], new: true, new_args: '{b:2}', json: true, constant_mode: :strict)
@@ -311,7 +449,7 @@ class RunnerTest < Minitest::Test
 
       captured = nil
       Rubycli.stub(:run, ->(target, *_args) { captured = target }) do
-        Rubycli::Runner.execute(file, nil, ['run'], new: true, new_args: '{retry: 2}', eval_args: false, eval_lax: true, json: false, constant_mode: :strict)
+        Rubycli::Runner.execute(file, nil, ['run'], new: true, new_args: '{retry: 2}', eval_args: true, eval_lax: true, json: false, constant_mode: :strict)
       end
       assert_equal({ retry: 2 }, captured.opts)
 
@@ -323,7 +461,7 @@ class RunnerTest < Minitest::Test
           ['run'],
           new: true,
           new_args: '{retry: 3}',
-          eval_args: false,
+          eval_args: true,
           eval_lax: true,
           json: false,
           constant_mode: :strict
@@ -333,7 +471,10 @@ class RunnerTest < Minitest::Test
 
       captured = nil
       Rubycli.stub(:run, ->(target, *_args) { captured = target }) do
-        Rubycli::Runner.execute(file, nil, ['run'], new: true, new_args: 'not{json', eval_args: false, eval_lax: true, json: false, constant_mode: :strict)
+        _out, err = capture_io do
+          Rubycli::Runner.execute(file, nil, ['run'], new: true, new_args: 'not{json', eval_args: true, eval_lax: true, json: false, constant_mode: :strict)
+        end
+        assert_includes err, 'Passing it through because --eval-lax is enabled'
       end
       # eval-lax falls back to raw string on parse error
       assert_equal 'not{json', captured.opts
@@ -347,7 +488,7 @@ class RunnerTest < Minitest::Test
       file = File.join(dir, 'eval_lax_runner.rb')
       File.write(file, <<~RUBY)
         class EvalLaxRunner
-          # values [String[]]
+          # VALUES [Symbol[]]
           def self.run(values)
             values
           end
@@ -355,21 +496,97 @@ class RunnerTest < Minitest::Test
       RUBY
 
       captured = nil
-      Rubycli.stub(:run, ->(target, *_args) { captured = target }) do
-        Rubycli::Runner.execute(
-          file,
-          nil,
-          ['run', '[:foo, :bar]'],
-          eval_args: false,
-          eval_lax: true,
-          json: false,
-          constant_mode: :strict
-        )
+      run_without_exit = ->(target, *_args) { Rubycli.cli.run(target, ARGV.dup, false) }
+      Rubycli.stub(:run, run_without_exit) do
+        Rubycli.stub(:call_target, ->(_method, pos_args, _kw_args) { captured = pos_args.first; nil }) do
+          Rubycli::Runner.execute(
+            file,
+            nil,
+            ['run', '[:foo, :bar]'],
+            eval_args: true,
+            eval_lax: true,
+            json: false,
+            constant_mode: :strict
+          )
+        end
       end
 
       assert_equal %i[foo bar], captured
     ensure
       Object.send(:remove_const, :EvalLaxRunner) if Object.const_defined?(:EvalLaxRunner)
+    end
+  end
+
+  def test_eval_binding_is_shared_between_initializer_and_command_within_one_execution
+    Dir.mktmpdir do |dir|
+      file = File.join(dir, 'shared_eval_binding_runner.rb')
+      File.write(file, <<~RUBY)
+        class SharedEvalBindingRunner
+          attr_reader :seed
+
+          # SEED [Integer]
+          def initialize(seed)
+            @seed = seed
+          end
+
+          # VALUE [Integer]
+          def add(value)
+            seed + value
+          end
+        end
+      RUBY
+
+      captured = nil
+      run_without_exit = ->(target, *_args) { Rubycli.cli.run(target, ARGV.dup, false) }
+      Rubycli.stub(:run, run_without_exit) do
+        Rubycli.stub(:call_target, ->(method, pos_args, _kw_args) {
+          captured = [method.receiver.seed, pos_args.first]
+          nil
+        }) do
+          Rubycli::Runner.execute(
+            file,
+            nil,
+            ['add', 'shared_seed + 2'],
+            new: true,
+            new_args: 'shared_seed = 40',
+            eval_args: true,
+            constant_mode: :strict
+          )
+        end
+      end
+
+      assert_equal [40, 42], captured
+    ensure
+      Object.send(:remove_const, :SharedEvalBindingRunner) if Object.const_defined?(:SharedEvalBindingRunner)
+    end
+  end
+
+  def test_eval_mode_is_disabled_while_loading_the_target_file
+    Dir.mktmpdir do |dir|
+      file = File.join(dir, 'eval_load_mode_runner.rb')
+      File.write(file, <<~RUBY)
+        class EvalLoadModeRunner
+          LOADED_WITH_EVAL_MODE = Rubycli.eval_mode?
+
+          def self.run
+            :ok
+          end
+        end
+      RUBY
+
+      Rubycli.stub(:run, ->(*) {}) do
+        Rubycli::Runner.execute(
+          file,
+          'EvalLoadModeRunner',
+          [],
+          eval_args: true,
+          constant_mode: :strict
+        )
+      end
+
+      assert_equal false, EvalLoadModeRunner::LOADED_WITH_EVAL_MODE
+    ensure
+      Object.send(:remove_const, :EvalLoadModeRunner) if Object.const_defined?(:EvalLoadModeRunner)
     end
   end
 
@@ -431,4 +648,177 @@ class RunnerTest < Minitest::Test
       Object.send(:remove_const, :DocCheckRunner) if Object.const_defined?(:DocCheckRunner)
     end
   end
+
+  def test_check_lints_explicit_class_methods_defined_in_a_required_file
+    Dir.mktmpdir do |dir|
+      dependency = File.join(dir, 'dependency_check_runner.rb')
+      entry = File.join(dir, 'dependency_check_entry.rb')
+      File.write(dependency, <<~RUBY)
+        class DependencyCheckRunner
+          # @param name [String] Documented name
+          # @param extra [String] This param does not exist
+          def self.run(name)
+            name
+          end
+        end
+      RUBY
+      File.write(entry, "require #{dependency.inspect}\n")
+
+      Rubycli.documentation_registry.reset!
+      Rubycli.environment.clear_documentation_issues!
+
+      status = nil
+      _out, _err = capture_io do
+        status = Rubycli::Runner.check(entry, 'DependencyCheckRunner')
+      end
+
+      assert_equal 1, status
+      refute_empty Rubycli.environment.documentation_issues
+    ensure
+      Rubycli.documentation_registry.reset!
+      Rubycli.environment.clear_documentation_issues!
+      Rubycli.environment.disable_doc_check!
+      Object.send(:remove_const, :DependencyCheckRunner) if Object.const_defined?(:DependencyCheckRunner)
+    end
+  end
+
+  def test_check_lints_singleton_method_defined_from_an_external_proc
+    Dir.mktmpdir do |dir|
+      dependency = File.join(dir, 'external_check_proc.rb')
+      entry = File.join(dir, 'external_proc_check_runner.rb')
+      File.write(dependency, <<~RUBY)
+        # @param name [String] Documented name
+        # @param extra [String] This param does not exist
+        ExternalCheckProc = proc { |name| name }
+      RUBY
+      File.write(entry, <<~RUBY)
+        require #{dependency.inspect}
+
+        class ExternalProcCheckRunner
+          define_singleton_method(:run, &ExternalCheckProc)
+        end
+      RUBY
+
+      Rubycli.documentation_registry.reset!
+      Rubycli.environment.clear_documentation_issues!
+
+      status = nil
+      _out, _err = capture_io do
+        status = Rubycli::Runner.check(entry, 'ExternalProcCheckRunner')
+      end
+
+      assert_equal 1, status
+      refute_empty Rubycli.environment.documentation_issues
+    ensure
+      Rubycli.documentation_registry.reset!
+      Rubycli.environment.clear_documentation_issues!
+      Rubycli.environment.disable_doc_check!
+      Object.send(:remove_const, :ExternalProcCheckRunner) if Object.const_defined?(:ExternalProcCheckRunner)
+      Object.send(:remove_const, :ExternalCheckProc) if Object.const_defined?(:ExternalCheckProc)
+    end
+  end
+
+  def test_check_new_lints_instance_methods_without_instantiating
+    Dir.mktmpdir do |dir|
+      file = File.join(dir, 'side_effect_check_runner.rb')
+      File.write(file, <<~RUBY)
+        class SideEffectCheckRunner
+          def initialize
+            $side_effect_check_runner_initializations += 1
+          end
+
+          # @param name [String] Documented name
+          # @param extra [String] This param does not exist
+          def run(name)
+            name
+          end
+        end
+      RUBY
+
+      $side_effect_check_runner_initializations = 0
+      Rubycli.documentation_registry.reset!
+      Rubycli.environment.clear_documentation_issues!
+
+      status = nil
+      _out, _err = capture_io do
+        status = Rubycli::Runner.check(file, 'SideEffectCheckRunner', new: true)
+      end
+
+      assert_equal 1, status
+      assert_equal 0, $side_effect_check_runner_initializations
+      refute_empty Rubycli.environment.documentation_issues
+    ensure
+      $side_effect_check_runner_initializations = nil
+      Rubycli.documentation_registry.reset!
+      Rubycli.environment.clear_documentation_issues!
+      Rubycli.environment.disable_doc_check!
+      Object.send(:remove_const, :SideEffectCheckRunner) if Object.const_defined?(:SideEffectCheckRunner)
+    end
+  end
+
+  def test_check_rejects_pre_scripts_without_evaluating_them
+    Dir.mktmpdir do |dir|
+      file = File.join(dir, 'pre_script_check_runner.rb')
+      File.write(file, <<~RUBY)
+        class PreScriptCheckRunner
+          def self.run
+            :ok
+          end
+        end
+      RUBY
+
+      $pre_script_check_evaluations = 0
+      Rubycli.environment.enable_doc_check!
+      error = assert_raises(Rubycli::Runner::Error) do
+        Rubycli::Runner.check(
+          file,
+          'PreScriptCheckRunner',
+          pre_scripts: [{ value: '$pre_script_check_evaluations += 1', context: '(inline --pre-script)' }]
+        )
+      end
+
+      assert_includes error.message, '--check cannot be combined with --pre-script'
+      assert_equal 0, $pre_script_check_evaluations
+      assert Rubycli.environment.doc_check_mode?
+    ensure
+      $pre_script_check_evaluations = nil
+      Rubycli.documentation_registry.reset!
+      Rubycli.environment.clear_documentation_issues!
+      Rubycli.environment.disable_doc_check!
+      Object.send(:remove_const, :PreScriptCheckRunner) if Object.const_defined?(:PreScriptCheckRunner)
+    end
+  end
+
+  def test_check_new_ignores_generated_attribute_writers
+    Dir.mktmpdir do |dir|
+      file = File.join(dir, 'accessor_check_runner.rb')
+      File.write(file, <<~RUBY)
+        class AccessorCheckRunner
+          # Writable value.
+          attr_writer :value
+
+          def run
+            :ok
+          end
+        end
+      RUBY
+
+      Rubycli.documentation_registry.reset!
+      Rubycli.environment.clear_documentation_issues!
+
+      status = nil
+      _out, _err = capture_io do
+        status = Rubycli::Runner.check(file, 'AccessorCheckRunner', new: true)
+      end
+
+      assert_equal 0, status
+      assert_empty Rubycli.environment.documentation_issues
+    ensure
+      Rubycli.documentation_registry.reset!
+      Rubycli.environment.clear_documentation_issues!
+      Rubycli.environment.disable_doc_check!
+      Object.send(:remove_const, :AccessorCheckRunner) if Object.const_defined?(:AccessorCheckRunner)
+    end
+  end
+
 end

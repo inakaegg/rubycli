@@ -10,6 +10,34 @@ module HelpEnumSamples
   def report(level, format: 'text'); end
 end
 
+module RestHelpSamples
+  module_function
+
+  # VALUES... [Symbol] Values to collect
+  def collect(*values)
+    values
+  end
+end
+
+module BareRestHelpSamples
+  module_function
+
+  # ITEMS [String] Items to collect
+  def collect(*items)
+    items
+  end
+end
+
+module OptionalPositionalHelpSamples
+  module_function
+
+  # PREFIX [Symbol] Optional prefix
+  # VALUE [Integer] Required value
+  def sequence(prefix = :default, value)
+    [prefix, value]
+  end
+end
+
 class HelpRendererTest < Minitest::Test
   def setup
     environment = Rubycli::Environment.new(env: {}, argv: [])
@@ -93,6 +121,30 @@ class HelpRendererTest < Minitest::Test
     usage = @renderer.usage_for_method('report', method)
     assert_includes usage, 'LEVEL  [:info, :warn, :error]'
     assert_includes usage, '--format=<TARGET>  ["text", "json"]'
+  end
+
+  def test_rest_parameter_is_optional_and_rendered_in_positional_table
+    method = RestHelpSamples.method(:collect)
+    usage = @renderer.usage_for_method('collect', method)
+
+    assert_includes usage, 'Usage: rubycli collect [VALUES...]'
+    assert_includes usage, 'VALUES...  [Symbol[]]  optional  Values to collect'
+  end
+
+  def test_rest_parameter_usage_adds_ellipsis_to_bare_documented_placeholder
+    method = BareRestHelpSamples.method(:collect)
+    usage = @renderer.usage_for_method('collect', method)
+
+    assert_includes usage, 'Usage: rubycli collect [ITEMS...]'
+  end
+
+  def test_documented_optional_positional_is_bracketed_in_usage
+    method = OptionalPositionalHelpSamples.method(:sequence)
+    usage = @renderer.usage_for_method('sequence', method)
+
+    assert_includes usage, 'Usage: rubycli sequence [PREFIX] VALUE'
+    assert_includes usage, 'PREFIX  [Symbol]   optional  Optional prefix'
+    assert_includes usage, 'VALUE   [Integer]  required  Required value'
   end
 
   private

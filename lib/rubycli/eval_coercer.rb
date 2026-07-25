@@ -2,7 +2,7 @@ module Rubycli
   class EvalCoercer
     THREAD_KEY = :rubycli_eval_mode
     LAX_THREAD_KEY = :rubycli_eval_lax_mode
-    EVAL_BINDING = Object.new.instance_eval { binding }
+    BINDING_THREAD_KEY = :rubycli_eval_binding
 
     def eval_mode?
       Thread.current[THREAD_KEY] == true
@@ -12,15 +12,28 @@ module Rubycli
       Thread.current[LAX_THREAD_KEY] == true
     end
 
-    def with_eval_mode(enabled = true, lax: false)
+    def with_eval_mode(enabled = true, lax: false, reuse_binding: false)
       previous = Thread.current[THREAD_KEY]
       previous_lax = Thread.current[LAX_THREAD_KEY]
+      previous_binding = Thread.current[BINDING_THREAD_KEY]
       Thread.current[THREAD_KEY] = enabled
       Thread.current[LAX_THREAD_KEY] = enabled && lax
+      if enabled
+        Thread.current[BINDING_THREAD_KEY] = reuse_binding && previous_binding ? previous_binding : isolated_binding
+      end
       yield
     ensure
       Thread.current[THREAD_KEY] = previous
       Thread.current[LAX_THREAD_KEY] = previous_lax
+      Thread.current[BINDING_THREAD_KEY] = previous_binding
+    end
+
+    def with_eval_binding
+      previous_binding = Thread.current[BINDING_THREAD_KEY]
+      Thread.current[BINDING_THREAD_KEY] = isolated_binding
+      yield
+    ensure
+      Thread.current[BINDING_THREAD_KEY] = previous_binding
     end
 
     def coerce_eval_value(value)
@@ -34,7 +47,7 @@ module Rubycli
       else
         value
       end
-    rescue StandardError => e
+    rescue SyntaxError, StandardError => e
       raise Rubycli::ArgumentError, "Failed to evaluate Ruby code: #{e.message}"
     end
 
@@ -44,7 +57,7 @@ module Rubycli
       trimmed = expression.strip
       return trimmed if trimmed.empty?
 
-      EVAL_BINDING.eval(trimmed)
+      (Thread.current[BINDING_THREAD_KEY] || isolated_binding).eval(trimmed)
     rescue SyntaxError, NameError => e
       if eval_lax_mode?
         warn "[WARN] Failed to evaluate argument as Ruby (#{e.message.strip}). Passing it through because --eval-lax is enabled."
@@ -52,6 +65,10 @@ module Rubycli
       else
         raise
       end
+    end
+
+    def isolated_binding
+      Object.new.instance_eval { binding }
     end
   end
 end

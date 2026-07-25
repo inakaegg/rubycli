@@ -134,22 +134,15 @@ module Rubycli
       end
     end
 
-    def execute_parameterless_method(method_obj, command, args, cli_mode)
+    def execute_parameterless_method(method_obj, command, args, _cli_mode)
       if help_requested_for_parameterless?(args)
         puts usage_for_method(command, method_obj)
         return 0
       end
 
-      begin
-        result = method_obj.call
-        debug_log "Parameterless method returned: #{result.inspect}"
-        if result
-          return run(result, args, false)
-        end
-        0
-      rescue StandardError => e
-        handle_execution_error(e, command, method_obj, [], {}, cli_mode)
-      end
+      puts "Command '#{command}' does not accept arguments."
+      puts usage_for_method(command, method_obj)
+      1
     end
 
     def execute_method_with_params(method_obj, command, args, cli_mode)

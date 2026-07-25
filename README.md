@@ -2,13 +2,39 @@
 
 ![Rubycli logo](assets/rubycli-logo.png)
 
-Rubycli turns existing Ruby classes and modules into CLIs by inspecting their public method definitions and the doc comments attached to those methods. It is inspired by [Python Fire](https://github.com/google/python-fire) but is not a drop-in port or an official project; the focus here is Ruby’s documentation conventions and type annotations, and those annotations can actively change how a CLI argument is coerced (for example, `TAG... [String[]]` forces array parsing).
+[![Gem Version](https://img.shields.io/gem/v/rubycli)](https://rubygems.org/gems/rubycli)
 
-> 🇯🇵 Japanese documentation is available in [README.ja.md](README.ja.md).
+Rubycli turns existing Ruby classes and modules into command-line interfaces.
+It inspects public method definitions and the doc comments attached to them, so
+in the simplest case your script needs no changes at all — not even
+`require "rubycli"`. Type annotations in comments are not just documentation:
+they drive how CLI arguments are parsed (for example, `TAG... [String[]]`
+forces array parsing).
+
+Rubycli is inspired by [Python Fire](https://github.com/google/python-fire) but
+is not a port or an official project; the focus is Ruby's documentation
+conventions and type annotations.
+
+> 🇯🇵 Japanese documentation: [README.ja.md](README.ja.md)
 
 ![Rubycli demo showing generated commands and invocation](assets/rubycli-demo.gif)
 
-### 1. Existing Ruby script (Rubycli unaware)
+## Installation
+
+```bash
+gem install rubycli
+```
+
+```ruby
+# Gemfile
+gem "rubycli"
+```
+
+Requires Ruby 3.0 or later. Licensed under [MIT](LICENSE).
+
+## Quick start
+
+### 1. Run an existing script as-is
 
 ```ruby
 # hello_app.rb
@@ -21,7 +47,8 @@ module HelloApp
 end
 ```
 
-> Try it yourself: this repository ships with `examples/hello_app.rb`, so from the project root you can run `rubycli examples/hello_app.rb` to explore the generated commands.
+This repository ships the same file as `examples/hello_app.rb`, so you can try
+everything below from the project root.
 
 ```bash
 rubycli examples/hello_app.rb
@@ -32,10 +59,12 @@ Usage: hello_app.rb COMMAND [arguments]
 
 Available commands:
   Class methods:
-    greet                <NAME>
+    greet                NAME
 
 Detailed command help: hello_app.rb COMMAND help
 ```
+
+Missing arguments produce a usage message instead of a stack trace:
 
 ```bash
 rubycli examples/hello_app.rb greet
@@ -54,16 +83,16 @@ rubycli examples/hello_app.rb greet Hanako
 #=> Hello, Hanako!
 ```
 
-Running `rubycli examples/hello_app.rb --help` prints the same summary as invoking it without a command.
+`rubycli examples/hello_app.rb --help` prints the same summary as invoking it
+without a command.
 
-### 2. Add documentation hints for richer flags
+### 2. Add doc comments for typed options
 
-> Still no `require "rubycli"` needed; comments alone drive option parsing and help text.
-
-**Concise placeholder style**
+Still no `require "rubycli"` needed; comments alone drive option parsing and
+help text. Both the concise placeholder style and YARD-style tags work:
 
 ```ruby
-# hello_app.rb
+# Concise placeholder style
 module HelloApp
   module_function
 
@@ -77,10 +106,8 @@ module HelloApp
 end
 ```
 
-**YARD-style tags work too**
-
 ```ruby
-# hello_app.rb
+# YARD-style tags
 module HelloApp
   module_function
 
@@ -94,24 +121,13 @@ module HelloApp
 end
 ```
 
-> The documented variant lives at `examples/hello_app_with_docs.rb` if you want to follow along locally.
+The documented variant lives at `examples/hello_app_with_docs.rb`. Its file
+name does not match the constant it defines (`HelloApp`), so pass
+`--auto-target` / `-a` or name the constant explicitly — see
+[Target constant resolution](#target-constant-resolution) below.
 
 ```bash
-rubycli examples/hello_app_with_docs.rb
-```
-
-```text
-Usage: hello_app_with_docs.rb COMMAND [arguments]
-
-Available commands:
-  Class methods:
-    greet                <NAME> [--shout]
-
-Detailed command help: hello_app_with_docs.rb COMMAND help
-```
-
-```bash
-rubycli examples/hello_app_with_docs.rb greet --help
+rubycli -a examples/hello_app_with_docs.rb greet --help
 ```
 
 ```text
@@ -125,11 +141,11 @@ Options:
 ```
 
 ```bash
-rubycli examples/hello_app_with_docs.rb greet --shout Hanako
+rubycli -a examples/hello_app_with_docs.rb greet --shout Hanako
 #=> HELLO, HANAKO!
 ```
 
-Need to keep a helper off the CLI? Define it as `private` on the singleton class:
+To keep a helper off the CLI, define it as `private` on the singleton class:
 
 ```ruby
 module HelloApp
@@ -143,95 +159,10 @@ module HelloApp
 end
 ```
 
-### 3. (Optional) Embed the runner inside your script
+### 3. Optional: embed the runner in your script
 
-Prefer to launch via `ruby ...` directly? Require the gem and delegate to `Rubycli.run` (see Quick start below for `examples/hello_app_with_require.rb`).
-
-```bash
-ruby examples/hello_app_with_require.rb greet Hanako --shout
-#=> HELLO, HANAKO!
-```
-
-## Constant resolution modes
-
-Rubycli assumes that the file name (CamelCased) matches the class or module you want to expose. When that is not the case you can choose how eagerly Rubycli should pick a constant:
-
-| Mode | How to enable | Behaviour |
-| --- | --- | --- |
-| `strict` (default) | do nothing / `RUBYCLI_AUTO_TARGET=strict` | Fails unless the CamelCase name matches. The error lists the detected constants and gives explicit rerun instructions. |
-| `auto` | `--auto-target`, `-a`, or `RUBYCLI_AUTO_TARGET=auto` | If exactly one constant in that file defines CLI-callable methods, Rubycli auto-selects it; otherwise you still get the friendly error message. |
-
-This keeps large projects safe by default but still provides a one-flag escape hatch when you prefer the fully automatic behaviour.
-
-> **Instance-only classes** – If a class only defines public *instance* methods (for example, it exposes functionality via `def greet` on the instance), you must run Rubycli with `--new` so the class is instantiated before commands are resolved. Otherwise Rubycli cannot see any CLI-callable methods. Add at least one public class method when you do not want to rely on `--new`. Passing `--new` also makes those instance methods appear in `rubycli --help` output and allows `rubycli --check --new` to lint their documentation. When your constructor needs arguments, pass them inline with `--new=VALUE` (safe YAML/JSON-like parsing by default; `--json-args` for strict JSON, `--eval-args` / `--eval-lax` for Ruby literals). Any comments on `initialize` are respected for type coercion just like regular CLI methods.
-
-> Hint: Single values should be passed as `--new=value` so they aren’t mistaken for the next path/command. Space-separated single tokens like `--new 1` may be treated as the following path unless they look obviously structured.
-
-## Project Philosophy
-
-- **Convenience first** – The goal is to wrap existing Ruby scripts in a CLI with almost no manual plumbing. Fidelity with Python Fire is not a requirement.
-- **Inspired, not a port** – We borrow ideas from Python Fire, but we do not aim for feature parity. Missing Fire features are generally “by design.”
-- **Method definitions first, comments augment behavior** – Public method signatures determine what gets exposed (and which arguments are required), while doc comments like `TAG...` or `[Integer]` can turn the very same CLI value into arrays, integers, booleans, etc. Rubycli also auto-parses inputs that look like JSON/YAML literals (for example `--names='["Alice","Bob"]'`) before enforcing the documented type. Run `rubycli --check path/to/script.rb` to lint documentation mismatches—including undefined type labels or enumerated values, with DidYouMean suggestions for `Booalean`-style typos—and pass `--strict` during normal runs when you want invalid input to abort instead of merely warning.
-- **Lightweight maintenance** – Much of the implementation was generated with AI assistance; contributions that diverge into deep Ruby metaprogramming are out of scope. Please discuss expectations before opening parity PRs.
-
-## Features
-
-- Comment-aware CLI generation with both YARD-style tags and concise placeholders
-- Automatic option signature inference (`NAME [Type] Description…`) without extra DSLs
-- Safe literal parsing out of the box (arrays / hashes / booleans) with opt-in strict JSON and Ruby eval modes
-- Optional pre-script hook (`--pre-script` / `--init`) to evaluate Ruby and expose the resulting object
-- Dedicated CLI flags for quality gates: `--check` lints documentation/comments without running commands, and `--strict` treats documented types/choices as hard requirements
-- Example `examples/new_mode_runner.rb` demonstrates instance-only classes with `--new=VALUE` constructor arguments, eval/JSON modes, and a pre-script initialization pattern.
-
-### Examples
-
-- `examples/hello_app.rb` / `examples/hello_app_with_docs.rb`: minimal module-function variants, with and without docs
-- `examples/typed_arguments_demo.rb`: stdlib type coercions (Date/Time/BigDecimal/Pathname)
-- `examples/strict_choices_demo.rb`: literal enumerations and `--strict`
-- `examples/new_mode_runner.rb`: instance-only class initialized via `--new=VALUE` with eval/JSON/pre-script combinations
-
-> Tip: `--strict` trusts whatever types/choices your comments spell out—if the annotations are misspelled, runtime enforcement has nothing reliable to compare against. Keep `rubycli --check` in CI so documentation typos are caught before production runs that rely on `--strict`.
-
-## How it differs from Python Fire
-
-- **Comment-aware help** – Rubycli leans on doc comments when present but still reflects the live method signature, keeping code as the ultimate authority.
-- **Type-aware parsing** – Placeholder syntax (`NAME [String]`) and YARD tags let Rubycli coerce arguments to booleans, arrays, numerics, etc. without additional code.
-- **Strict validation** – `rubycli --check` lint runs catch documentation drift (including undefined type labels or enumerated values) without executing commands, while runtime `--strict` runs turn those documented types/choices into enforceable contracts.
-- **Ruby-centric tooling** – Supports Ruby-specific conventions such as optional keyword arguments, block documentation (`@yield*` tags), and `RUBYCLI_*` environment toggles.
-
-| Capability | Python Fire | Rubycli |
-| ---------- | ----------- | -------- |
-| Attribute traversal | Recursively exposes attributes/properties on demand | Exposes public methods defined on the target; no implicit traversal |
-| Constructor handling | Automatically prompts for `__init__` args when instantiating classes | `--new` instantiates and accepts constructor arguments via `--new=VALUE` (safe YAML/JSON-like parsing by default; `--json-args` for strict JSON, `--eval-args` / `--eval-lax` for Ruby literals). Use pre-scripts or your own factories for more complex wiring. |
-| Interactive shell | Offers Fire-specific REPL when invoked without command | No interactive shell mode; strictly command execution |
-| Input discovery | Pure reflection, no doc comments required | Doc comments drive option names, placeholders, and validation |
-| Data structures | Dictionaries / lists become subcommands by default | Focused on class or module methods; no automatic dict/list expansion |
-
-#### Example commands
-
-- `rubycli examples/new_mode_runner.rb run --new='["a","b","c"]' --mode reverse`
-- `rubycli --json-args --new='["x","y"]' examples/new_mode_runner.rb run --mode summary --options '{"source":"json"}'`
-- `rubycli --eval-args --new='["x","y"]' examples/new_mode_runner.rb run --mode summary --options '{tags: [:a, :b]}'`
-- `rubycli --pre-script 'NewModeRunner.new(%w[a b c], options: {from: :pre})' examples/new_mode_runner.rb run --mode summary`
-
-## Installation
-
-Rubycli is published on RubyGems.
-
-```bash
-gem install rubycli
-```
-
-Bundler example:
-
-```ruby
-# Gemfile
-gem "rubycli"
-```
-
-## Quick start (embed Rubycli in the script)
-
-Step 3 adds `require "rubycli"` so the script can invoke the CLI directly (see `examples/hello_app_with_require.rb`):
+If you prefer launching via plain `ruby`, require the gem and delegate to
+`Rubycli.run` (shipped as `examples/hello_app_with_require.rb`):
 
 ```ruby
 # hello_app_with_require.rb
@@ -254,131 +185,183 @@ end
 Rubycli.run(HelloApp)
 ```
 
-Run it:
-
 ```bash
-ruby examples/hello_app_with_require.rb greet Taro
-#=> Hello, Taro!
-
 ruby examples/hello_app_with_require.rb greet Taro --shout
 #=> HELLO, TARO!
 ```
 
-To launch the same file without adding `require "rubycli"`, use the bundled executable:
+When you run a file through the bundled `rubycli` executable instead, return
+values are printed automatically.
 
-```bash
-rubycli path/to/hello_app.rb greet --shout Hanako
-```
+## Target constant resolution
 
-When you omit `CLASS_OR_MODULE`, Rubycli now infers it from the file name and even locates nested constants such as `Module1::Inner::Runner`. Return values are printed by default when you run the bundled CLI.
+Rubycli assumes that the file name (CamelCased) matches the class or module you
+want to expose. When it does not, choose how eagerly Rubycli should pick a
+constant:
 
-Need to target a different constant explicitly? Provide it after the file path:
+| Mode | How to enable | Behaviour |
+| --- | --- | --- |
+| `strict` (default) | nothing / `RUBYCLI_AUTO_TARGET=strict` | Fails unless the CamelCase name matches. The error lists the detected constants and shows how to rerun. |
+| `auto` | `--auto-target` / `-a` / `RUBYCLI_AUTO_TARGET=auto` | If exactly one constant in the file defines CLI-callable methods, it is selected automatically. |
+
+You can always name the constant explicitly after the file path — useful when a
+file defines several candidates or a nested constant:
 
 ```bash
 rubycli scripts/multi_runner.rb Admin::Runner list --active
 ```
 
-This is useful when a file defines multiple candidates or when you want a nested constant that does not match the file name.
+Nested constants such as `Module1::Inner::Runner` are found as well.
+
+## Instance-only classes and `--new`
+
+If a class only defines public *instance* methods, run Rubycli with `--new` so
+the class is instantiated before commands are resolved; otherwise Rubycli sees
+no CLI-callable methods.
+
+- `--new` also makes instance methods appear in `--help` output, and lets
+  `rubycli --check --new` lint their documentation.
+- When the constructor needs arguments, pass them with `--new=VALUE` **before
+  the file path**. Values are parsed as safe YAML/JSON-like literals, and
+  comments on `initialize` drive type coercion just like regular CLI methods.
+- Prefer the `--new=VALUE` form over a space-separated `--new VALUE`, so the
+  value is not mistaken for the file path.
+
+Example (`examples/new_mode_runner.rb`):
+
+```bash
+rubycli --new='["a","b","c"]' examples/new_mode_runner.rb run --mode reverse
+#=> ["c", "b", "a"]
+```
 
 ## Comment syntax
 
-Rubycli parses a hybrid format – you can stick to familiar YARD tags or use short forms.
+Rubycli parses a hybrid format — familiar YARD tags or short forms:
 
 | Purpose | YARD-compatible | Rubycli style |
 | ------- | --------------- | ------------- |
 | Positional argument | `@param name [Type] Description` | `NAME [Type] Description` |
-| Keyword option | Same as above | `--flag -f VALUE [Type] Description` |
+| Keyword option | same | `--flag -f VALUE [Type] Description` |
 | Return value | `@return [Type] Description` | `=> [Type] Description` |
 
-Short options are optional and order-independent, so the following examples are equivalent in Rubycli’s default style:
+Short options are optional and order-independent; these are equivalent:
 
 - `--flag -f VALUE [Type] Description`
 - `--flag VALUE [Type] Description`
 - `-f --flag VALUE [Type] Description`
 
-Our examples keep the classic uppercase placeholders (`NAME`, `VALUE`) as the canonical style; the variations below are optional sugar.
+Types can be written as `[String]` or `(String)`, and unions as
+`(String, nil)`.
 
 ### Alternate placeholder notations
 
-Rubycli also understands these syntaxes when parsing comments and rendering help:
+These are understood both when parsing comments and when rendering help:
 
-- Angle brackets for user input: `--flag <value>` or `NAME [<value>]`
-- Inline equals for long options: `--flag=<value>`
-- Trailing ellipsis for repeated values: `VALUE...` or `<value>...`
+- Angle brackets: `--flag <value>`, `NAME [<value>]`
+- Inline equals: `--flag=<value>`
+- Trailing ellipsis for repeated values: `VALUE...`, `<value>...`
 
-The CLI treats `--flag VALUE`, `--flag <value>`, and `--flag=<value>` identically at runtime—document with whichever variant your team prefers. Optional placeholders like `[VALUE]` or `[VALUE...]` let Rubycli infer boolean flags, optional values, and list coercion. When you omit the placeholder entirely (for example `--quiet`), Rubycli infers a Boolean flag automatically.
+At runtime `--flag VALUE`, `--flag <value>`, and `--flag=<value>` are
+identical — document with whichever variant your team prefers. You do not need
+to bracket optional arguments yourself: Rubycli already knows which parameters
+are optional from the Ruby signature and adds the brackets in generated help.
 
-> Tip: You do not need to wrap optional arguments in brackets inside the comment. Rubycli already knows which parameters are optional from the Ruby signature and will introduce the brackets in generated help.
+Inference rules when annotations are partial:
 
-You can annotate types using `[String]` or `(String)`—they both convey the same hint, and you can list multiple types such as `(String, nil)`.
+- A bare placeholder such as `ARG1` (no type) is treated as `String`.
+- An option with no value placeholder (`--verbose`) becomes a Boolean flag.
+- Positional arguments only become booleans with an explicit `[Boolean]`;
+  a bare `NAME Description` falls back to `String` regardless of the Ruby
+  default value.
 
-Repeated values (`VALUE...`) now materialize as arrays automatically whenever the option is documented with an ellipsis (for example `TAG...`) or an explicit array type hint (`[String[]]`, `Array<String>`). Supply either JSON/YAML list syntax (`--tags "[\"build\",\"test\"]"`) or a comma-delimited string (`--tags "build,test"`); Rubycli will coerce both forms to arrays. Space-separated multi-value flags (`--tags build test`) are still not supported, and options without a repeated/array hint continue to be parsed as scalars. Strict mode still verifies each element against the documented type, so `--tags [1,2]` will fail when the docs say `[String[]]`.
+### Arrays and repeated values
 
-Need to pass structures that are awkward to express as JSON (for example symbol arrays or hashes)? Enable eval mode (`--eval-args`/`-e` or `--eval-lax`/`-E`) and supply a Ruby literal that matches the documented type; the example in the eval section below shows how to pass multiple enum selections safely even though space-separated syntax remains unsupported.
-
-Common inference rules:
-
-- Writing a placeholder such as `ARG1` (without `[String]`) makes Rubycli treat it as a `String`.
-- Using that placeholder in an option line (`--name ARG1`) also infers a `String`.
-- Omitting the placeholder entirely (`--verbose`) produces a Boolean flag.
-- Positional arguments only become booleans when you annotate `[Boolean]`; a bare `NAME Description` (or `@param name Description`) falls back to `String`, regardless of the Ruby default value.
+Options documented with an ellipsis (`TAG...`) or an array type
+(`[String[]]`, `Array<String>`) are parsed as arrays. Both JSON/YAML list
+syntax (`--tags '["build","test"]'`) and comma-delimited strings
+(`--tags "build,test"`) are accepted. Space-separated multi-value flags
+(`--tags build test`) are not supported, and options without a repeated/array
+hint stay scalars. `--strict` verifies each element against the documented
+type, so `--tags [1,2]` fails when the docs say `[String[]]`. Quoted elements
+remain strings even when their contents look like other literals, such as
+`--tags '["true","null"]'`.
 
 ### Literal choices and enums
 
-You can express a finite set of accepted values directly inside the type annotation, for example `--format MODE [:json, :yaml, :auto]` or `LEVEL [:info, :warn]`. Symbols, strings (including barewords), booleans, numbers, and `nil` are supported, and you can mix literal entries with broader types such as `--channel TARGET [:stdout, :stderr, Boolean]`. `%i[info warn]` / `%w[debug info]` short-hands expand as expected, so `LEVEL %i[info warn]` works the same as the explicit array form. Rubycli always records these choices in the generated help; when you run with `--strict`, any value outside the documented set results in `Rubycli::ArgumentError`, otherwise a warning is printed and execution proceeds.
+A finite set of accepted values can be written directly inside the type
+annotation: `--format MODE [:json, :yaml, :auto]` or `LEVEL [:info, :warn]`.
+Symbols, strings (including barewords), booleans, numbers, and `nil` are
+supported; literals can be mixed with broader types
+(`--channel TARGET [:stdout, :stderr, Boolean]`), and `%i[info warn]` /
+`%w[debug info]` shorthands expand as expected. The choices always appear in
+generated help; without `--strict` an out-of-range value only prints a warning,
+with `--strict` it aborts.
 
-> Symbols and strings are compared strictly. `[:info, :warn]` requires symbol inputs such as `:info`, while `["info", "warn"]` only accepts plain strings. Prefix a value with `:` at the CLI to pass a symbol.
-
-> Literal enums currently apply to each scalar argument. If an option is documented as an array (for example `[Symbol[]]`), spell out the allowed members in prose for now—combined literal arrays such as `[%i[foo bar][]]` are not supported.
-
-```bash
-# literal choices + booleans (see examples/strict_choices_demo.rb)
-ruby examples/strict_choices_demo.rb report warn --format json
-#=> [WARN] format=json
-
-# the same command with --strict will abort when values drift
-ruby -Ilib exe/rubycli --strict examples/strict_choices_demo.rb report debug
-#=> Rubycli::ArgumentError: Value "debug" for LEVEL is not allowed: allowed values are :info, :warn, :error
-```
+Symbols and strings are compared strictly: `[:info, :warn]` requires symbol
+input such as `:info` (prefix the value with `:` at the CLI), while
+`["info", "warn"]` only accepts plain strings.
 
 ```bash
-# symbol values stay distinct
-ruby -Ilib exe/rubycli --strict examples/strict_choices_demo.rb report :warn
-#=> [WARN] format=text
+# see examples/strict_choices_demo.rb — LEVEL is documented as [:info, :warn, :error]
+rubycli examples/strict_choices_demo.rb report :warn --format json
+#=> [WARN] format=json   (followed by the returned hash)
 
-ruby -Ilib exe/rubycli --strict examples/strict_choices_demo.rb report warn
-#=> Rubycli::ArgumentError: Value "warn" for LEVEL is not allowed: allowed values are :info, :warn, :error
+# a plain string is not the documented symbol: warn and continue
+rubycli examples/strict_choices_demo.rb report warn
+#=> [WARN] LEVEL must be one of :info, :warn, :error (received "warn") (use --strict to abort on invalid input)
+
+# with --strict, out-of-range input aborts
+rubycli --strict examples/strict_choices_demo.rb report debug
+#=> [ERROR] LEVEL must be one of :info, :warn, :error (received "debug")
 ```
+
+Literal enums currently apply to each scalar argument; combined literal arrays
+such as `[%i[foo bar][]]` are not supported.
 
 ### Standard library type hints
 
-Doc comments can reference standard classes such as `Date`, `Time`, `BigDecimal`, or `Pathname`. Rubycli loads the necessary stdlib files on demand and coerces CLI inputs using the documented types.
+Doc comments can reference standard classes such as `Date`, `Time`,
+`BigDecimal`, or `Pathname`. Rubycli loads the required stdlib on demand and
+coerces CLI inputs, so the handler receives real objects without manual
+parsing:
 
 ```bash
 # see examples/typed_arguments_demo.rb
-ruby examples/typed_arguments_demo.rb ingest \
+rubycli examples/typed_arguments_demo.rb ingest \
   --date 2024-12-25 \
   --moment 2024-12-25T10:00:00Z \
   --budget 123.45 \
   --input ./data/input.csv
 ```
 
-This command prints a normalized summary and the handler receives real `Date`, `Time`, `BigDecimal`, and `Pathname` objects without manual parsing.
+Every option there has a default, so you can also experiment one at a time
+(`... ingest --budget 999.99`).
 
-Each option has a sensible default, so you can also experiment one at a time (for example `ruby examples/typed_arguments_demo.rb ingest --budget 999.99`).
+Other YARD tags such as `@example`, `@raise`, `@see`, and `@deprecated` are
+currently ignored by the help renderer.
 
-Other YARD tags such as `@example`, `@raise`, `@see`, and `@deprecated` are currently ignored by the CLI renderer.
+> To explore every notation in one script, try
+> `rubycli examples/documentation_style_showcase.rb canonical --help` and the
+> other showcase commands.
 
-> Want to explore every notation in a single script? Try `rubycli examples/documentation_style_showcase.rb canonical --help`, `... angled --help`, or the other showcase commands.
+### Notes on YARD-style comments
 
-YARD-style `@param` annotations continue to work out of the box. If you want to enforce the concise placeholder syntax exclusively, set `RUBYCLI_ALLOW_PARAM_COMMENT=OFF` (strict mode still applies either way).
+- Methods that accept `**kwargs` do not expose those keys automatically; every
+  key you want on the CLI needs its own `--long-name PLACEHOLDER [Type] ...`
+  line.
+- Bullet lists or free-form lines following a `@param` line are not used for
+  CLI generation; put supplementary text in the option's description instead.
+- To enforce the concise placeholder syntax exclusively, set
+  `RUBYCLI_ALLOW_PARAM_COMMENT=OFF`; `@param`/`@return` tags then produce
+  warnings, which helps a gradual migration.
 
 ### When docs are missing or incomplete
 
-Rubycli always trusts the live method signature. If a parameter (or option) is undocumented, the CLI still exposes it using the parameter name and default values inferred from the method definition:
+Rubycli always trusts the live method signature. Undocumented parameters are
+still exposed, with names, defaults, and types inferred from the definition:
 
 ```ruby
-# fallback_example.rb
+# examples/fallback_example.rb
 module FallbackExample
   module_function
 
@@ -393,20 +376,6 @@ end
 ```
 
 ```bash
-rubycli examples/fallback_example.rb
-```
-
-```text
-Usage: fallback_example.rb COMMAND [arguments]
-
-Available commands:
-  Class methods:
-    scale                AMOUNT [<FACTOR>] [--clamp=<value>] [--notify]
-
-Detailed command help: fallback_example.rb COMMAND help
-```
-
-```bash
 rubycli examples/fallback_example.rb scale --help
 ```
 
@@ -415,50 +384,56 @@ Usage: fallback_example.rb scale AMOUNT [FACTOR] [--clamp=<CLAMP>] [--notify]
 
 Positional arguments:
   AMOUNT  [Integer]  required  Base amount to process
-  FACTOR             optional  (default: 2)
+  FACTOR  [String]   optional  (default: 2)
 
 Options:
   --clamp=<CLAMP>  [String]   optional  (default: nil)
   --notify         [Boolean]  optional  (default: false)
 ```
 
-Here only `AMOUNT` is documented, yet `factor`, `clamp`, and `notify` are still presented with sensible defaults and inferred types. Run `rubycli --check path/to/script.rb` during development to surface mismatches between comments and signatures, and pass `--strict` when executing commands to enforce the documented types/choices.
+Only `AMOUNT` is documented, yet `factor`, `clamp`, and `notify` are presented
+with inferred defaults and types.
 
-#### What if the docs mention arguments that do not exist?
+Comments never add live parameters by themselves. Lines that reference
+non-existent options (say `--ghost`) or positionals are shown verbatim in the
+help's detail section instead of becoming real arguments, and strict mode warns
+about positional mismatches. For a runnable mismatch demo:
+`rubycli examples/fallback_example_with_extra_docs.rb scale --help`.
 
-- **Out-of-sync lines fall back to plain text** – Comments that reference non-existent options (for example `--ghost`) or positionals (such as `EXTRA`) are emitted verbatim in the help’s detail section. They do not materialize as real arguments, and strict mode still warns about positional mismatches (`Extra positional argument comments were found: EXTRA`) so you can reconcile the docs.
+Run `rubycli --check path/to/script.rb` during development to lint
+documentation drift — including undefined type labels and enum typos, with
+DidYouMean suggestions — and pass `--strict` at runtime when invalid input
+should abort instead of merely warning.
 
-> Want to see this behaviour? Try `rubycli examples/fallback_example_with_extra_docs.rb scale --help` for a runnable mismatch demo.
-
-In short, comments never add live parameters by themselves; they enrich or describe what your method already supports.
+> `--strict` trusts whatever types/choices your comments spell out. Keep
+> `rubycli --check` in CI so documentation typos are caught before production
+> runs that rely on `--strict`.
 
 ## Argument parsing modes
 
 ### Default literal parsing
 
-Rubycli tries to interpret arguments that look like structured literals (values starting with `{`, `[`, quotes, or YAML front matter) using `Psych.safe_load` before handing them to your code. That means values such as `--names='["Alice","Bob"]'` or `--config='{foo: 1}'` arrive as native arrays / hashes without any extra flags. Plain strings like `1,2,3` stay untouched at this stage (if the documentation declares `String[]` or `TAG...`, a later pass still normalises them into arrays), and unsupported constructs fall back to the original text, so `"2024-01-01"` remains a string and malformed payloads still reach your method instead of killing the run.
+Arguments that look like structured literals (starting with `{`, `[`, quotes,
+or YAML markers) are parsed with `Psych.safe_load`, so
+`--names='["Alice","Bob"]'` or `--config='{foo: 1}'` arrive as native arrays
+and hashes without extra flags. Plain strings like `1,2,3` stay untouched at
+this stage (a later pass normalises them into arrays when the docs declare
+`String[]` or `TAG...`), and unsupported constructs fall back to the original
+text, so `"2024-01-01"` remains a string and malformed payloads still reach
+your method instead of killing the run.
 
-### JSON mode
+### JSON mode (`--json-args` / `-j`)
 
-Supply `--json-args` (or the shorthand `-j`) when invoking the runner and Rubycli will parse subsequent arguments strictly as JSON before passing them to your method:
+Parses subsequent arguments strictly as JSON. YAML-only syntax is rejected and
+invalid payloads raise `JSON::ParserError` — for callers who want explicit
+failures instead of silent fallbacks. Programmatic equivalent:
+`Rubycli.with_json_mode(true) { ... }`.
 
-```bash
-rubycli -j my_cli.rb MyCLI run '["--config", "{\"foo\":1}"]'
-```
+### Eval mode (`--eval-args` / `-e`, `--eval-lax` / `-E`)
 
-This mode rejects YAML-only syntax and raises `JSON::ParserError` when the payload is invalid, which is handy for callers who want explicit failures instead of silent fallbacks. Programmatically you can call `Rubycli.with_json_mode(true) { … }`.
-
-## Eval mode
-
-Use `--eval-args` (or the shorthand `-e`) to evaluate Ruby expressions before they are forwarded to your CLI. This is handy when you want to pass rich objects that are awkward to express as JSON:
-
-```bash
-rubycli -e scripts/data_cli.rb DataCLI run '(1..10).to_a'
-```
-
-Under the hood Rubycli evaluates each argument inside an isolated binding (`Object.new.instance_eval { binding }`). Treat this as unsafe input: do not enable it for untrusted callers. The mode can also be toggled programmatically via `Rubycli.with_eval_mode(true) { … }`.
-
-Because Ruby evaluation understands symbols, arrays, and hashes, it’s a convenient way to pass literal enum combinations to options that expect arrays:
+Evaluates each argument as a Ruby expression before it is forwarded, which is
+handy for objects that are awkward as JSON — symbol arrays, ranges, inline
+math:
 
 ```bash
 rubycli -E scripts/report_runner.rb publish \
@@ -466,56 +441,120 @@ rubycli -E scripts/report_runner.rb publish \
   --channels '[:email, :slack]'
 ```
 
-Need Ruby evaluation plus a safety net? Pass `--eval-lax` (or `-E`). It flips on eval mode just like `--eval-args`, but if Ruby fails to parse a token (for example, a bare `https://example.com`), Rubycli emits a warning and forwards the original string unchanged. This lets you mix inline math (`60*60*24*14`) with literal values without constantly juggling quotes.
+Evaluation happens inside an isolated binding
+(`Object.new.instance_eval { binding }`). All eval arguments in one Runner
+execution, including `--new=VALUE` constructor arguments and the selected
+command's arguments, share that binding; it is discarded after the execution.
+Treat this as unsafe input: do not enable it for untrusted callers.
+Programmatic equivalent: `Rubycli.with_eval_mode(true) { ... }`.
 
-`--json-args`/`-j` cannot be combined with either `--eval-args`/`-e` or `--eval-lax`/`-E`; Rubycli will raise an error if both are present. Both modes augment the default literal parsing, so you can pick either strict JSON or one of the Ruby eval variants when the defaults are not enough.
+`--eval-lax` / `-E` behaves like `--eval-args`, but tokens that fail to parse
+as Ruby (for example a bare `https://example.com`) produce a warning and are
+forwarded as the original string — convenient for mixing expressions like
+`60*60*24*14` with plain values.
+
+`--json-args` cannot be combined with either eval variant; Rubycli raises an
+error if both are present.
 
 ## Pre-script bootstrap
 
-Add `--pre-script SRC` (alias: `--init`) when launching the bundled CLI to run arbitrary Ruby code before exposing methods. The code runs inside an isolated binding where the following locals are pre-populated:
+`--pre-script SRC` (alias: `--init`) runs arbitrary Ruby before commands are
+resolved, inside an isolated binding with these locals pre-populated:
 
-- `target` – the original class or module (before `--new` instantiation)
-- `current` / `instance` – the object that would otherwise be exposed (after `--new` if specified)
+- `target` — the original class or module (before `--new` instantiation)
+- `current` / `instance` — the object that would otherwise be exposed
 
-The last evaluated value becomes the new public target. Returning `nil` keeps the previous object.
+The last evaluated value becomes the new public target (`nil` keeps the
+previous object). `SRC` can be inline Ruby or a file path.
 
-Inline example:
-
-```bash
-rubycli --pre-script 'InitArgRunner.new(source: "cli", retries: 2)' \
-  lib/init_arg_runner.rb summarize --verbose
-```
-
-File example:
+Example — replace the `--new`-built instance with a hand-built one:
 
 ```bash
-# scripts/bootstrap_runner.rb
-instance = InitArgRunner.new(source: "preset")
-instance.logger = Logger.new($stdout)
-instance
+rubycli --new='["a"]' \
+  --pre-script 'NewModeRunner.new(%w[a b c], options: {from: :pre})' \
+  examples/new_mode_runner.rb run --mode summary
 ```
 
-```bash
-rubycli --pre-script scripts/bootstrap_runner.rb \
-  lib/init_arg_runner.rb summarize --verbose
-```
-
-This keeps `--new` available for quick zero-argument instantiation while allowing richer bootstrapping when needed.
-
-## Environment variables & flags
+## Flags and environment variables
 
 | Flag / Env | Description | Default |
 | ---------- | ----------- | ------- |
+| `--auto-target` / `-a`, `RUBYCLI_AUTO_TARGET=auto` | Auto-select the target constant when the file name does not match | `strict` |
+| `--new[=VALUE]` | Instantiate the class before resolving commands; `VALUE` feeds the constructor | off |
+| `--pre-script SRC` / `--init SRC` | Run Ruby code to build/replace the exposed object | off |
+| `--check` | Lint documentation/comments without executing commands | off |
+| `--strict` | Enforce documented types/choices; invalid input aborts | off |
+| `--json-args` / `-j` | Parse arguments strictly as JSON | off |
+| `--eval-args` / `-e`, `--eval-lax` / `-E` | Evaluate arguments as Ruby (lax: fall back to the raw string) | off |
 | `RUBYCLI_DEBUG=true` | Print debug logs | `false` |
-| `--check` | Validate documentation/comments without executing commands | `off` |
-| `--strict` | Enforce documented choices/types; invalid input aborts | `off` |
-| `RUBYCLI_ALLOW_PARAM_COMMENT=OFF` | Disable legacy `@param` lines (defaults to on today for compatibility) | `ON` |
+| `RUBYCLI_ALLOW_PARAM_COMMENT=OFF` | Disable YARD `@param` lines (on by default for compatibility) | `ON` |
 
 ## Library helpers
 
-- `Rubycli.parse_arguments(argv, method)` – parse argv with comment metadata
-- `Rubycli.available_commands(target)` – list CLI exposable methods
-- `Rubycli.usage_for_method(name, method)` – render usage for a single method
-- `Rubycli.method_description(method)` – fetch structured documentation info
+- `Rubycli.parse_arguments(argv, method)` — parse argv with comment metadata
+- `Rubycli.available_commands(target)` — list CLI-exposable methods
+- `Rubycli.usage_for_method(name, method)` — render usage for a single method
+- `Rubycli.method_description(method)` — fetch structured documentation info
 
-Feedback and issues are welcome while we prepare the public release.
+## How it differs from Python Fire
+
+- **Comment-aware help** — doc comments enrich the help, but the live method
+  signature stays the ultimate authority.
+- **Type-aware parsing** — placeholder syntax and YARD tags coerce arguments to
+  booleans, arrays, numerics, and more without additional code.
+- **Two-stage validation** — `--check` lints documentation drift without
+  executing commands; `--strict` turns documented types/choices into
+  enforceable runtime contracts.
+- **Ruby-centric** — keyword arguments, block documentation (`@yield*` tags),
+  and `RUBYCLI_*` environment toggles.
+
+| Capability | Python Fire | Rubycli |
+| ---------- | ----------- | ------- |
+| Attribute traversal | Recursively exposes attributes/properties | Exposes public methods on the target; no implicit traversal |
+| Constructor handling | Prompts for `__init__` args automatically | `--new` instantiates; constructor args via `--new=VALUE`, richer wiring via pre-scripts |
+| Interactive shell | Fire-specific REPL when invoked without a command | No interactive shell; strictly command execution |
+| Input discovery | Pure reflection, no doc comments | Doc comments drive option names, placeholders, and validation |
+| Data structures | Dicts/lists become subcommands | Class/module methods only; no automatic dict/list expansion |
+
+## Project philosophy
+
+- **Convenience first** — wrap existing Ruby scripts with almost no manual
+  plumbing. Fidelity with Python Fire is not a goal; missing Fire features are
+  generally by design.
+- **Method definitions first, comments augment** — signatures determine what is
+  exposed and what is required; comments refine types, help text, and
+  validation.
+- **Lightweight maintenance** — much of the implementation was generated with
+  AI assistance; contributions that dive into deep Ruby metaprogramming are out
+  of scope. Please discuss expectations before opening parity PRs.
+
+## Bundled examples
+
+- `examples/hello_app.rb` / `examples/hello_app_with_docs.rb` — minimal
+  module-function variants, without and with docs
+- `examples/hello_app_with_require.rb` — embedded `Rubycli.run`
+- `examples/typed_arguments_demo.rb` — stdlib type coercions
+  (Date/Time/BigDecimal/Pathname)
+- `examples/strict_choices_demo.rb` — literal enumerations and `--strict`
+- `examples/new_mode_runner.rb` — instance-only class initialized via
+  `--new=VALUE`
+- `examples/documentation_style_showcase.rb` — every comment notation in one
+  script
+- `examples/fallback_example.rb` / `examples/fallback_example_with_extra_docs.rb`
+  — signature fallback and doc-mismatch demos
+
+## Development verification
+
+Run the full test suite and enforce the repository's coverage thresholds
+(90% overall line coverage, 70% branch coverage, and 90% coverage of
+executable lines changed from `origin/main`) with:
+
+```bash
+ruby -Ilib:test test/coverage_runner.rb
+```
+
+## License
+
+MIT. See [LICENSE](LICENSE).
+
+Feedback and issues are welcome.
