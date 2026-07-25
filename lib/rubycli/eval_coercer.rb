@@ -37,7 +37,7 @@ module Rubycli
       else
         value
       end
-    rescue StandardError => e
+    rescue SyntaxError, StandardError => e
       raise Rubycli::ArgumentError, "Failed to evaluate Ruby code: #{e.message}"
     end
 
