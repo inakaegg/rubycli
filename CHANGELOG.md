@@ -1,6 +1,14 @@
 # Changelog
 
-# Changelog
+## [Unreleased]
+
+### Fixed
+- Parameterless commands now reject unexpected arguments without invoking the target method or attempting implicit return-value traversal.
+- Required options now report a missing value instead of consuming the following option token, while explicit values such as `true` remain valid.
+- Constant discovery now includes classes and modules assigned with `Class.new` / `Module.new` during the target file load.
+- Constructor arity errors raised by `--new` are now wrapped in Rubycli's user-facing runner error.
+- Positional type conversion now waits for JSON/eval coercion, matching keyword-option behavior and preserving `--new` JSON/eval inputs.
+- Runner tests now execute without terminating the Minitest process and assert converted command arguments instead of stubbed targets.
 
 ## [0.1.7] - 2025-11-12
 

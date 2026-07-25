@@ -57,6 +57,31 @@ class CLITest < Minitest::Test
     assert_includes out, 'Usage: rubycli info'
   end
 
+  def test_parameterless_method_rejects_extra_arguments_without_invoking_method
+    target = Class.new do
+      class << self
+        attr_accessor :calls
+      end
+
+      self.calls = 0
+
+      def self.info
+        self.calls += 1
+        nil
+      end
+    end
+
+    status = nil
+    out, _err = capture_io do
+      status = @cli.run(target, ['info', 'unexpected'], true)
+    end
+
+    assert_equal 1, status
+    assert_equal 0, target.calls
+    assert_includes out, "Command 'info' does not accept arguments."
+    assert_includes out, 'Usage: rubycli info'
+  end
+
   def test_help_input_skips_strict_validation
     method_obj = ChoiceDocSamples.method(:report)
     status = nil

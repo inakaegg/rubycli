@@ -21,6 +21,7 @@ module Rubycli
       kw_args = {}
 
       kw_param_names = extract_keyword_parameter_names(method)
+      required_kw_param_names = extract_required_keyword_parameter_names(method)
       debug_log "Available keyword parameters: #{kw_param_names.inspect}"
 
       metadata = method ? @documentation_registry.metadata_for(method) : { options: [], returns: [], summary: nil }
@@ -48,7 +49,8 @@ module Rubycli
             kw_args,
             cli_aliases,
             option_lookup,
-            type_converters
+            type_converters,
+            required_kw_param_names
           )
         elsif assignment_token?(token)
           stream.advance
@@ -88,6 +90,14 @@ module Rubycli
             .map { |_, name| name.to_s }
     end
 
+    def extract_required_keyword_parameter_names(method)
+      return [] unless method
+
+      method.parameters
+            .select { |type, _| type == :keyreq }
+            .map { |_, name| name.to_s }
+    end
+
     def option_token?(token)
       token =~ /\A-{1,2}([a-zA-Z0-9_-]+)(?:=(.*))?\z/
     end
@@ -103,7 +113,8 @@ module Rubycli
       kw_args,
       cli_aliases,
       option_lookup,
-      type_converters
+      type_converters,
+      required_kw_param_names
     )
       token =~ /\A-{1,2}([a-zA-Z0-9_-]+)(?:=(.*))?\z/
       cli_key = Regexp.last_match(1).tr('-', '_')
@@ -117,7 +128,11 @@ module Rubycli
       final_key_sym = final_key.to_sym
 
       option_meta = option_lookup[final_key_sym]
-      requires_value = option_meta ? option_meta[:requires_value] : nil
+      requires_value = if option_meta
+                         option_meta[:requires_value]
+                       else
+                         required_kw_param_names.include?(final_key)
+                       end
       option_label = option_meta&.long || "--#{final_key.tr('_', '-')}"
 
       value_capture = if embedded_value
@@ -128,13 +143,15 @@ module Rubycli
                           stream,
                           requires_value
                         )
+                      elsif requires_value
+                        capture_required_option_value(option_label, stream)
                       elsif (next_token = stream.current) && !looks_like_option?(next_token)
                         stream.consume
                       else
                         'true'
                       end
 
-      if requires_value && (value_capture.nil? || value_capture == 'true')
+      if requires_value && value_capture.nil?
         raise ArgumentError, "Option '#{option_label}' requires a value"
       end
 
@@ -147,6 +164,16 @@ module Rubycli
 
       kw_args[final_key_sym] = converted_value
     end
+
+    def capture_required_option_value(option_label, stream)
+      next_token = stream.current
+      if next_token.nil? || looks_like_option?(next_token)
+        raise ArgumentError, "Option '#{option_label}' requires a value"
+      end
+
+      stream.consume
+    end
+
     def capture_option_value(option_meta, stream, requires_value)
       if option_meta[:boolean_flag]
         if (next_token = stream.current) && TypeUtils.boolean_string?(next_token)
@@ -161,10 +188,7 @@ module Rubycli
       elsif requires_value == false
         return 'true'
       elsif requires_value
-        next_token = stream.current
-        raise ArgumentError, "Option '#{option_meta.long}' requires a value" unless next_token
-
-        return stream.consume
+        return capture_required_option_value(option_meta.long, stream)
       elsif (next_token = stream.current) && !looks_like_option?(next_token)
         return stream.consume
       else
@@ -189,6 +213,7 @@ module Rubycli
 
     def convert_positional_arguments(pos_args, method, metadata)
       return pos_args unless method
+      return pos_args if Rubycli.eval_mode? || Rubycli.json_mode?
 
       positional_map = metadata[:positionals_map] || {}
       return pos_args if positional_map.empty?

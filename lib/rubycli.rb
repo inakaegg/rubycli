@@ -378,7 +378,7 @@ module Rubycli
       else
         target
       end
-    rescue ArgumentError => e
+    rescue ::ArgumentError => e
       raise Error, "Failed to instantiate target: #{e.message}"
     end
 

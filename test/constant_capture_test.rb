@@ -32,6 +32,34 @@ class ConstantCaptureTest < Minitest::Test
     end
   end
 
+  def test_records_class_assigned_to_constant
+    capture = Rubycli::ConstantCapture.new
+    Tempfile.create(['assigned_class', '.rb']) do |file|
+      file.write("CaptureAssignedClass = Class.new do\n  def self.run; end\nend\n")
+      file.flush
+
+      capture.capture(file.path) { load file.path }
+
+      assert_includes capture.constants_for(file.path), 'CaptureAssignedClass'
+    ensure
+      cleanup_constant(:CaptureAssignedClass)
+    end
+  end
+
+  def test_records_module_assigned_to_constant
+    capture = Rubycli::ConstantCapture.new
+    Tempfile.create(['assigned_module', '.rb']) do |file|
+      file.write("CaptureAssignedModule = Module.new do\n  def self.run; end\nend\n")
+      file.flush
+
+      capture.capture(file.path) { load file.path }
+
+      assert_includes capture.constants_for(file.path), 'CaptureAssignedModule'
+    ensure
+      cleanup_constant(:CaptureAssignedModule)
+    end
+  end
+
   private
 
   def cleanup_constant(name)

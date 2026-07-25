@@ -3,6 +3,14 @@
 require 'test_helper'
 
 class CommandLineTest < Minitest::Test
+  def setup
+    @previous_print_result = Rubycli.environment.print_result?
+  end
+
+  def teardown
+    Rubycli.environment.instance_variable_set(:@print_result, @previous_print_result)
+  end
+
   def test_returns_usage_when_no_arguments
     status = nil
     out, err = capture_io do

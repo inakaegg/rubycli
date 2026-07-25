@@ -74,6 +74,19 @@ class RunnerTest < Minitest::Test
     end
   end
 
+  def test_initializer_argument_error_is_wrapped_as_runner_error
+    target = Class.new do
+      def initialize(required); end
+    end
+
+    error = assert_raises(Rubycli::Runner::Error) do
+      Rubycli::Runner.instantiate_target(target)
+    end
+
+    assert_includes error.message, 'Failed to instantiate target'
+    assert_includes error.message, 'wrong number of arguments'
+  end
+
   def test_auto_mode_selects_single_constant_when_names_differ
     Dir.mktmpdir do |dir|
       file = File.join(dir, 'cli_entry.rb')
@@ -253,8 +266,11 @@ class RunnerTest < Minitest::Test
       RUBY
 
       parsed = nil
-      Rubycli.stub(:call_target, ->(_method, pos_args, kw_args) { parsed = { pos: pos_args, kw: kw_args } }) do
-        Rubycli::Runner.execute(file, nil, ['combine', '{"foo":1}', 'true'], constant_mode: :strict, eval_args: false, json: true, new: false)
+      run_without_exit = ->(target, *_args) { Rubycli.cli.run(target, ARGV.dup, false) }
+      Rubycli.stub(:run, run_without_exit) do
+        Rubycli.stub(:call_target, ->(_method, pos_args, kw_args) { parsed = { pos: pos_args, kw: kw_args }; nil }) do
+          Rubycli::Runner.execute(file, nil, ['combine', '{"foo":1}', 'true'], constant_mode: :strict, eval_args: false, json: true, new: false)
+        end
       end
       assert_equal([{ 'foo' => 1 }, true], parsed[:pos])
       assert_equal({}, parsed[:kw])
@@ -262,9 +278,22 @@ class RunnerTest < Minitest::Test
       previous_strict = Rubycli.environment.strict_input?
       begin
         Rubycli.environment.enable_strict_input!
-        assert_raises(Rubycli::ArgumentError) do
-          Rubycli::Runner.execute(file, nil, ['combine', 'not-a-hash', 'maybe'], constant_mode: :strict, eval_args: false, json: true, new: false)
+        status = nil
+        _out, err = capture_io do
+          Rubycli.stub(:run, run_without_exit) do
+            status = Rubycli::Runner.execute(
+              file,
+              nil,
+              ['combine', '"not-a-hash"', '"maybe"'],
+              constant_mode: :strict,
+              eval_args: false,
+              json: true,
+              new: false
+            )
+          end
         end
+        assert_equal 1, status
+        assert_includes err, 'CONFIG must be Hash'
       ensure
         Rubycli.environment.instance_variable_set(:@strict_input, previous_strict)
       end
@@ -302,7 +331,7 @@ class RunnerTest < Minitest::Test
       Rubycli.stub(:run, ->(target, *_args) { captured = target }) do
         Rubycli::Runner.execute(file, nil, ['run'], new: true, new_args: '{"b":2}', eval_args: true, constant_mode: :strict)
       end
-      assert_equal({ 'b' => 2 }, captured.opts)
+      assert_equal({ b: 2 }, captured.opts)
 
       error = assert_raises(Rubycli::Runner::Error) do
         Rubycli::Runner.execute(file, nil, ['run'], new: true, new_args: '{b:2}', json: true, constant_mode: :strict)
@@ -311,7 +340,7 @@ class RunnerTest < Minitest::Test
 
       captured = nil
       Rubycli.stub(:run, ->(target, *_args) { captured = target }) do
-        Rubycli::Runner.execute(file, nil, ['run'], new: true, new_args: '{retry: 2}', eval_args: false, eval_lax: true, json: false, constant_mode: :strict)
+        Rubycli::Runner.execute(file, nil, ['run'], new: true, new_args: '{retry: 2}', eval_args: true, eval_lax: true, json: false, constant_mode: :strict)
       end
       assert_equal({ retry: 2 }, captured.opts)
 
@@ -323,7 +352,7 @@ class RunnerTest < Minitest::Test
           ['run'],
           new: true,
           new_args: '{retry: 3}',
-          eval_args: false,
+          eval_args: true,
           eval_lax: true,
           json: false,
           constant_mode: :strict
@@ -333,7 +362,10 @@ class RunnerTest < Minitest::Test
 
       captured = nil
       Rubycli.stub(:run, ->(target, *_args) { captured = target }) do
-        Rubycli::Runner.execute(file, nil, ['run'], new: true, new_args: 'not{json', eval_args: false, eval_lax: true, json: false, constant_mode: :strict)
+        _out, err = capture_io do
+          Rubycli::Runner.execute(file, nil, ['run'], new: true, new_args: 'not{json', eval_args: true, eval_lax: true, json: false, constant_mode: :strict)
+        end
+        assert_includes err, 'Passing it through because --eval-lax is enabled'
       end
       # eval-lax falls back to raw string on parse error
       assert_equal 'not{json', captured.opts
@@ -347,7 +379,7 @@ class RunnerTest < Minitest::Test
       file = File.join(dir, 'eval_lax_runner.rb')
       File.write(file, <<~RUBY)
         class EvalLaxRunner
-          # values [String[]]
+          # VALUES [Symbol[]]
           def self.run(values)
             values
           end
@@ -355,16 +387,19 @@ class RunnerTest < Minitest::Test
       RUBY
 
       captured = nil
-      Rubycli.stub(:run, ->(target, *_args) { captured = target }) do
-        Rubycli::Runner.execute(
-          file,
-          nil,
-          ['run', '[:foo, :bar]'],
-          eval_args: false,
-          eval_lax: true,
-          json: false,
-          constant_mode: :strict
-        )
+      run_without_exit = ->(target, *_args) { Rubycli.cli.run(target, ARGV.dup, false) }
+      Rubycli.stub(:run, run_without_exit) do
+        Rubycli.stub(:call_target, ->(_method, pos_args, _kw_args) { captured = pos_args.first; nil }) do
+          Rubycli::Runner.execute(
+            file,
+            nil,
+            ['run', '[:foo, :bar]'],
+            eval_args: true,
+            eval_lax: true,
+            json: false,
+            constant_mode: :strict
+          )
+        end
       end
 
       assert_equal %i[foo bar], captured

@@ -44,6 +44,14 @@ module StdTypeSamples
   end
 end
 
+module UndocumentedKeywordSamples
+  module_function
+
+  def call(name:, verbose: false)
+    [name, verbose]
+  end
+end
+
 class ArgumentParserTest < Minitest::Test
   def setup
     @environment = Rubycli::Environment.new(env: {}, argv: [])
@@ -64,6 +72,35 @@ class ArgumentParserTest < Minitest::Test
 
     assert_equal ['Alice'], pos_args
     assert_equal({ greeting: 'Hi', shout: true, punctuation: '!' }, kw_args)
+  end
+
+  def test_required_option_rejects_following_option_as_its_value
+    method = DocExamples::TaggedSamples.new.method(:greet)
+
+    error = assert_raises(Rubycli::ArgumentError) do
+      @parser.parse(['Alice', '--greeting', '--shout'], method)
+    end
+
+    assert_includes error.message, "Option '--greeting' requires a value"
+  end
+
+  def test_required_option_accepts_true_as_an_explicit_value
+    method = DocExamples::TaggedSamples.new.method(:greet)
+
+    pos_args, kw_args = @parser.parse(['Alice', '--greeting', 'true'], method)
+
+    assert_equal ['Alice'], pos_args
+    assert_equal({ greeting: true }, kw_args)
+  end
+
+  def test_undocumented_required_keyword_rejects_following_option_as_its_value
+    method = UndocumentedKeywordSamples.method(:call)
+
+    error = assert_raises(Rubycli::ArgumentError) do
+      @parser.parse(['--name', '--verbose'], method)
+    end
+
+    assert_includes error.message, "Option '--name' requires a value"
   end
 
   def test_parses_concise_options_with_short_alias_and_array_conversion
