@@ -15,12 +15,12 @@ module Rubycli
       previous_names = @captured[normalized_file].dup
       previous_assignment_definitions = @assignment_definitions.fetch(normalized_file, {})
       current_assignment_definitions = assigned_constant_definitions(normalized_file)
-      executed_lines = []
+      executed_line_contexts = Hash.new { |hash, line| hash[line] = [] }
       assignment_events = Hash.new { |hash, line| hash[line] = [] }
       observed_events = []
       @captured[normalized_file] = []
       before_snapshot = constant_snapshot(normalized_file)
-      trace = TracePoint.new(:class, :line, :c_call, :c_return) do |tp|
+      trace = TracePoint.new(:class, :line, :call, :return, :b_call, :b_return, :c_call, :c_return) do |tp|
         location = tp.path
         next unless location && same_file?(normalized_file, location)
 
@@ -32,7 +32,12 @@ module Rubycli
     ensure
       trace&.disable
       if normalized_file && before_snapshot
-        apply_trace_events(observed_events, executed_lines, assignment_events, normalized_file)
+        apply_trace_events(
+          observed_events,
+          executed_line_contexts,
+          assignment_events,
+          normalized_file
+        )
         after_snapshot = constant_snapshot(normalized_file)
         changed_names = after_snapshot.keys.select do |name|
           before_snapshot[name] != after_snapshot[name]
@@ -43,7 +48,7 @@ module Rubycli
           definition_active = active_definition_retained?(
             previous_definitions,
             current_definitions,
-            executed_lines,
+            executed_line_contexts,
             assignment_events
           )
           after_snapshot.key?(name) && definition_active
@@ -128,11 +133,18 @@ module Rubycli
       "#{owner_name}::#{constant_name}"
     end
 
-    def apply_trace_events(events, executed_lines, assignment_events, file)
+    def apply_trace_events(events, executed_line_contexts, assignment_events, file)
+      active_context_events = []
       events.each do |event, target, line, method_id|
         case event
         when :line
-          executed_lines << line
+          executed_line_contexts[line] << active_context_events.dup
+        when :call, :b_call
+          active_context_events << event
+        when :return
+          remove_active_context_event(active_context_events, :call)
+        when :b_return
+          remove_active_context_event(active_context_events, :b_call)
         when :c_call
           if method_id == :const_added || (method_id == :warn && target.equal?(Warning))
             assignment_events[line] << method_id
@@ -144,6 +156,11 @@ module Rubycli
           @captured[file] << constant_name if constant_name
         end
       end
+    end
+
+    def remove_active_context_event(active_context_events, event)
+      index = active_context_events.rindex(event)
+      active_context_events.delete_at(index) if index
     end
 
     def constants_set_at(owner, file, line)
@@ -161,17 +178,34 @@ module Rubycli
       end
     end
 
-    def active_definition_retained?(previous_definitions, current_definitions, executed_lines, assignment_events)
+    def active_definition_retained?(
+      previous_definitions,
+      current_definitions,
+      executed_line_contexts,
+      assignment_events
+    )
       previous_definitions.any? do |previous|
         current_definitions.any? do |current|
           next false unless previous[:signature] == current[:signature]
 
           events = assignment_events[current[:line]]
           assignment_observed = events.include?(:const_added) || events.count(:warn) >= 2
-          current[:persistent] ||
-            assignment_observed ||
-            (!current[:ambiguous_line] && executed_lines.include?(current[:line]))
+          persistence_observed = current[:persistence_line] &&
+            !current[:persistence_ambiguous] &&
+            executed_line_contexts[current[:persistence_line]].any? do |active_context_events|
+              context_requirements_met?(
+                active_context_events,
+                current[:required_context_events]
+              )
+            end
+          assignment_observed || persistence_observed
         end
+      end
+    end
+
+    def context_requirements_met?(active_context_events, required_context_events)
+      required_context_events.uniq.all? do |event|
+        active_context_events.count(event) >= required_context_events.count(event)
       end
     end
 
@@ -248,10 +282,23 @@ module Rubycli
         collect_assigned_constant_definitions(node[2], namespace, contexts, definitions)
         body_context = contexts + [[[node.first, canonical_syntax(node[2])], source_line(node[1])]]
         collect_assigned_constant_definitions(node[3], namespace, body_context, definitions)
-      when :def, :defs, :lambda, :do_block, :brace_block
-        lazy_context = contexts + [[[node.first], source_line(node)]]
+      when :method_add_block
+        collect_assigned_constant_definitions(node[1], namespace, contexts, definitions)
+        lazy_context = contexts + [[[:block], source_line(node[1]), :b_call]]
+        collect_assigned_constant_definitions(node[2], namespace, lazy_context, definitions)
+      when :def, :defs
+        lazy_context = contexts + [[[node.first], source_line(node), :call]]
         node.drop(1).each do |child|
           collect_assigned_constant_definitions(child, namespace, lazy_context, definitions)
+        end
+      when :lambda
+        lazy_context = contexts + [[[node.first], source_line(node), :b_call]]
+        node.drop(1).each do |child|
+          collect_assigned_constant_definitions(child, namespace, lazy_context, definitions)
+        end
+      when :do_block, :brace_block
+        node.drop(1).each do |child|
+          collect_assigned_constant_definitions(child, namespace, contexts, definitions)
         end
       else
         node.each do |child|
@@ -266,14 +313,19 @@ module Rubycli
       assigned_name = constant_name_from_node(node, namespace)
       if assigned_name
         line = source_line(node)
-        # A line event can precede a skipped postfix/short-circuit assignment.
-        ambiguous_line = contexts.any? { |context| context[1] == line }
-        persistent = constant_existence_guard?(contexts, assigned_name) && !lazy_context?(contexts)
+        persistence = persistence_metadata(
+          contexts,
+          assigned_name,
+          namespace,
+          line,
+          signature[1] == '||='
+        )
         definition = {
           signature: signature,
           line: line,
-          ambiguous_line: ambiguous_line,
-          persistent: persistent
+          persistence_line: persistence[:line],
+          persistence_ambiguous: persistence[:ambiguous],
+          required_context_events: persistence[:required_context_events]
         }
         definitions[assigned_name] = Array(definitions[assigned_name]) | [definition]
       elsif node.is_a?(Array)
@@ -292,7 +344,7 @@ module Rubycli
       constant_name = literal_constant_name(arguments.first)
       return unless constant_name
 
-      owner_name = if receiver.nil?
+      owner_name = if receiver.nil? || self_receiver?(receiver)
                      namespace.join('::')
                    elsif object_receiver?(receiver)
                      ''
@@ -304,13 +356,13 @@ module Rubycli
       assigned_name = [owner_name, constant_name].reject(&:empty?).join('::')
       signature = [:const_set, nil, contexts.map(&:first)]
       line = source_line(node)
-      ambiguous_line = contexts.any? { |context| context[1] == line }
+      persistence = persistence_metadata(contexts, assigned_name, namespace, line, false)
       definition = {
         signature: signature,
         line: line,
-        ambiguous_line: ambiguous_line,
-        persistent: contexts.empty? ||
-          (constant_existence_guard?(contexts, assigned_name) && !lazy_context?(contexts))
+        persistence_line: persistence[:line],
+        persistence_ambiguous: persistence[:ambiguous],
+        required_context_events: persistence[:required_context_events]
       }
       definitions[assigned_name] = Array(definitions[assigned_name]) | [definition]
     end
@@ -349,28 +401,103 @@ module Rubycli
       node&.first == :var_ref && node.dig(1, 0) == :@const && node.dig(1, 1) == 'Object'
     end
 
-    def constant_existence_guard?(contexts, assigned_name)
-      constant_name = assigned_name.split('::').last
-      contexts.any? do |context, _line|
-        has_method = find_syntax_token(context) { |_type, value| value == 'const_defined?' }
-        has_constant = find_syntax_token(context) { |_type, value| value == constant_name }
-        defined_guard = syntax_node_with_token?(context, :defined, constant_name)
-        (has_method && has_constant) || defined_guard
+    def self_receiver?(node)
+      node&.first == :var_ref && node.dig(1, 0) == :@kw && node.dig(1, 1) == 'self'
+    end
+
+    def persistence_metadata(contexts, assigned_name, namespace, assignment_line, short_circuit_assignment)
+      guard = contexts.reverse.find do |context|
+        missing_constant_guard?(context.first, assigned_name, namespace)
+      end
+      persistence_line = guard&.[](1)
+      persistence_line ||= assignment_line if short_circuit_assignment
+      return { line: nil, ambiguous: false, required_context_events: [] } unless persistence_line
+
+      same_line_contexts = contexts.select { |context| context[1] == persistence_line }
+      ambiguous = same_line_contexts.any? do |context|
+        !lazy_context?(context) &&
+          !missing_constant_guard?(context.first, assigned_name, namespace)
+      end
+      required_context_events = same_line_contexts.filter_map do |context|
+        context[2]
+      end
+      {
+        line: persistence_line,
+        ambiguous: ambiguous,
+        required_context_events: required_context_events
+      }
+    end
+
+    def missing_constant_guard?(context, assigned_name, namespace)
+      condition, expected = guarded_condition(context)
+      return false unless condition
+
+      condition, expected = unwrap_guard_condition(condition, expected)
+      expected == false && guarded_constant_name(condition, namespace) == assigned_name
+    end
+
+    def guarded_condition(context)
+      case context.first
+      when :if
+        [context[2], context[1] == :then]
+      when :unless
+        [context[2], context[1] != :then]
+      when :if_mod
+        [context[1], true]
+      when :unless_mod
+        [context[1], false]
+      when :ifop
+        [context[2], context[1] == :then]
+      when :binary
+        [context[2], context[1] == :'&&']
       end
     end
 
-    def syntax_node_with_token?(node, node_type, token_value)
-      return false unless node.is_a?(Array)
-      if node.first == node_type
-        return true if find_syntax_token(node) { |_type, value| value == token_value }
-      end
+    def unwrap_guard_condition(condition, expected)
+      loop do
+        case condition&.first
+        when :paren
+          expressions = condition[1]
+          break unless expressions.is_a?(Array) && expressions.length == 1
 
-      node.any? { |child| syntax_node_with_token?(child, node_type, token_value) }
+          condition = expressions.first
+        when :unary
+          break unless condition[1] == :!
+
+          condition = condition[2]
+          expected = !expected
+        else
+          break
+        end
+      end
+      [condition, expected]
     end
 
-    def lazy_context?(contexts)
-      lazy_types = %i[def defs lambda do_block brace_block]
-      contexts.any? { |context, _line| lazy_types.include?(context.first) }
+    def guarded_constant_name(condition, namespace)
+      if condition&.first == :defined
+        return constant_name_from_node(condition[1], namespace)
+      end
+
+      receiver, method_name, arguments = call_parts(condition)
+      return nil unless method_name == 'const_defined?'
+
+      constant_name = literal_constant_name(arguments.first)
+      return nil unless constant_name
+
+      owner_name = if receiver.nil? || self_receiver?(receiver)
+                     namespace.join('::')
+                   elsif object_receiver?(receiver)
+                     ''
+                   else
+                     constant_name_from_node(receiver, namespace)
+                   end
+      return nil if owner_name.nil?
+
+      [owner_name, constant_name].reject(&:empty?).join('::')
+    end
+
+    def lazy_context?(context)
+      !context[2].nil?
     end
 
     def find_syntax_token(node, &predicate)

@@ -8,7 +8,7 @@
 - Required options accept negative exponent and radix notation such as `-1e3` and `-0x10` without mistaking them for another option.
 - Constant discovery now includes classes and modules assigned with `Class.new` / `Module.new` during the target file load.
 - Repeated loads retain assigned constant aliases when the source file is unchanged.
-- Repeated loads after source edits retain aliases created by direct, guarded, multiple, and `const_set` assignments while their active definitions remain, without reviving aliases behind newly disabled conditions.
+- Repeated loads retain aliases from completed direct, multiple, and `const_set` assignments or matching fully qualified existence guards, without reviving failed assignments or aliases behind disabled conditions.
 - Constructor arity errors raised by `--new` are now wrapped in Rubycli's user-facing runner error.
 - Framework argument errors raised by constructors are also wrapped in the same user-facing runner error.
 - Positional type conversion now waits for JSON/eval coercion, matching keyword-option behavior and preserving `--new` JSON/eval inputs.

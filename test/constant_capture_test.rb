@@ -531,6 +531,157 @@ class ConstantCaptureTest < Minitest::Test
     end
   end
 
+  def test_retains_self_const_set_alias_inside_namespace
+    capture = Rubycli::ConstantCapture.new
+    Tempfile.create(['self_const_set_alias', '.rb']) do |file|
+      file.write(<<~RUBY)
+        module CaptureSelfConstSetAliasSource
+          def self.run; end
+        end
+        module CaptureSelfConstSetOwner
+          self.const_set(:Runner, CaptureSelfConstSetAliasSource) unless const_defined?(:Runner, false)
+        end
+      RUBY
+      file.flush
+
+      2.times do
+        capture_io { capture.capture(file.path) { load file.path } }
+        assert_includes capture.constants_for(file.path), 'CaptureSelfConstSetOwner::Runner'
+      end
+    ensure
+      if Object.const_defined?(:CaptureSelfConstSetOwner)
+        owner = Object.const_get(:CaptureSelfConstSetOwner)
+        owner.send(:remove_const, :Runner) if owner.const_defined?(:Runner, false)
+      end
+      cleanup_constant(:CaptureSelfConstSetOwner)
+      cleanup_constant(:CaptureSelfConstSetAliasSource)
+    end
+  end
+
+  def test_does_not_match_existence_guard_for_another_namespace
+    capture = Rubycli::ConstantCapture.new
+    Tempfile.create(['qualified_guard_alias', '.rb']) do |file|
+      file.write(<<~RUBY)
+        module CaptureQualifiedGuardAliasSource
+          def self.run; end
+        end
+        module CaptureGuardedOwner; end
+        module CaptureAssignedOwner; end
+        unless defined?(CaptureGuardedOwner::Runner)
+          CaptureAssignedOwner::Runner = CaptureQualifiedGuardAliasSource
+        end
+      RUBY
+      file.flush
+
+      capture_io { capture.capture(file.path) { load file.path } }
+      Object.const_get(:CaptureGuardedOwner).const_set(:Runner, Module.new)
+      capture_io { capture.capture(file.path) { load file.path } }
+
+      refute_includes capture.constants_for(file.path), 'CaptureAssignedOwner::Runner'
+    ensure
+      %i[CaptureGuardedOwner CaptureAssignedOwner].each do |owner_name|
+        next unless Object.const_defined?(owner_name)
+
+        owner = Object.const_get(owner_name)
+        owner.send(:remove_const, :Runner) if owner.const_defined?(:Runner, false)
+      end
+      cleanup_constant(:CaptureGuardedOwner)
+      cleanup_constant(:CaptureAssignedOwner)
+      cleanup_constant(:CaptureQualifiedGuardAliasSource)
+    end
+  end
+
+  def test_retains_guarded_alias_in_immediately_executed_block
+    capture = Rubycli::ConstantCapture.new
+    Tempfile.create(['immediate_block_guarded_alias', '.rb']) do |file|
+      file.write(<<~RUBY)
+        module CaptureImmediateBlockAliasSource
+          def self.run; end
+        end
+        1.times do; CaptureImmediateBlockAssignedAlias = CaptureImmediateBlockAliasSource unless defined?(CaptureImmediateBlockAssignedAlias); end
+      RUBY
+      file.flush
+
+      2.times do
+        capture_io { capture.capture(file.path) { load file.path } }
+        assert_includes capture.constants_for(file.path), 'CaptureImmediateBlockAssignedAlias'
+      end
+    ensure
+      cleanup_constant(:CaptureImmediateBlockAssignedAlias)
+      cleanup_constant(:CaptureImmediateBlockAliasSource)
+    end
+  end
+
+  def test_does_not_retain_guarded_alias_in_uninvoked_block
+    capture = Rubycli::ConstantCapture.new
+    previous_mode = ENV['RUBYCLI_BLOCK_CAPTURE_MODE']
+    Tempfile.create(['conditional_block_guarded_alias', '.rb']) do |file|
+      file.write(<<~RUBY)
+        module CaptureConditionalBlockAliasSource
+          def self.run; end
+        end
+        install = proc do; CaptureConditionalBlockAssignedAlias = CaptureConditionalBlockAliasSource unless defined?(CaptureConditionalBlockAssignedAlias); end
+        install.call if ENV['RUBYCLI_BLOCK_CAPTURE_MODE'] == 'on'
+      RUBY
+      file.flush
+
+      ENV['RUBYCLI_BLOCK_CAPTURE_MODE'] = 'on'
+      2.times do
+        capture_io { capture.capture(file.path) { load file.path } }
+        assert_includes capture.constants_for(file.path), 'CaptureConditionalBlockAssignedAlias'
+      end
+
+      ENV['RUBYCLI_BLOCK_CAPTURE_MODE'] = 'off'
+      capture_io { capture.capture(file.path) { load file.path } }
+      refute_includes capture.constants_for(file.path), 'CaptureConditionalBlockAssignedAlias'
+    ensure
+      ENV['RUBYCLI_BLOCK_CAPTURE_MODE'] = previous_mode
+      cleanup_constant(:CaptureConditionalBlockAssignedAlias)
+      cleanup_constant(:CaptureConditionalBlockAliasSource)
+    end
+  end
+
+  def test_retains_aliases_for_equivalent_existence_guard_forms
+    capture = Rubycli::ConstantCapture.new
+    Tempfile.create(['equivalent_guard_forms', '.rb']) do |file|
+      file.write(<<~RUBY)
+        module CaptureEquivalentGuardSource
+          def self.run; end
+        end
+        module CaptureEquivalentGuardOwner; end
+        CaptureEquivalentGuardOwner.const_defined?(:Runner, false) || (CaptureEquivalentGuardOwner::Runner = CaptureEquivalentGuardSource)
+        CaptureNegatedGuardAlias = CaptureEquivalentGuardSource if !(defined?(CaptureNegatedGuardAlias))
+        defined?(CaptureTernaryGuardAlias) ? nil : (CaptureTernaryGuardAlias = CaptureEquivalentGuardSource)
+        install = -> { CaptureLambdaGuardAlias = CaptureEquivalentGuardSource unless defined?(CaptureLambdaGuardAlias) }
+        install.call
+      RUBY
+      file.flush
+
+      expected_names = %w[
+        CaptureEquivalentGuardOwner::Runner
+        CaptureNegatedGuardAlias
+        CaptureTernaryGuardAlias
+        CaptureLambdaGuardAlias
+      ]
+      2.times do
+        capture_io { capture.capture(file.path) { load file.path } }
+        expected_names.each do |name|
+          assert_includes capture.constants_for(file.path), name
+        end
+      end
+    ensure
+      if Object.const_defined?(:CaptureEquivalentGuardOwner)
+        owner = Object.const_get(:CaptureEquivalentGuardOwner)
+        owner.send(:remove_const, :Runner) if owner.const_defined?(:Runner, false)
+      end
+      cleanup_constant(:CaptureEquivalentGuardOwner)
+      cleanup_constant(:CaptureEquivalentGuardSource)
+      cleanup_constant(:CaptureNegatedGuardAlias)
+      cleanup_constant(:CaptureTernaryGuardAlias)
+      cleanup_constant(:CaptureLambdaGuardAlias)
+    end
+  end
+
   def test_does_not_retain_const_set_moved_into_uninvoked_method
     capture = Rubycli::ConstantCapture.new
     Tempfile.create(['deferred_const_set_alias', '.rb']) do |file|
@@ -589,6 +740,36 @@ class ConstantCaptureTest < Minitest::Test
       ENV['RUBYCLI_CONST_SET_MODE'] = previous_mode
       cleanup_constant(:CapturePostfixConstSetAssignedAlias)
       cleanup_constant(:CapturePostfixConstSetAliasSource)
+    end
+  end
+
+  def test_does_not_retain_assignment_when_rhs_raises_before_assignment
+    capture = Rubycli::ConstantCapture.new
+    previous_failure = ENV['RUBYCLI_CAPTURE_FAILURE']
+    Tempfile.create(['raising_assignment_alias', '.rb']) do |file|
+      file.write(<<~RUBY)
+        module CaptureRaisingAliasSource
+          def self.run; end
+        end
+        begin
+          CaptureRaisingAssignedAlias = (ENV['RUBYCLI_CAPTURE_FAILURE'] == 'yes' ? raise('boom') : CaptureRaisingAliasSource)
+        rescue RuntimeError
+        end
+      RUBY
+      file.flush
+
+      ENV['RUBYCLI_CAPTURE_FAILURE'] = 'no'
+      capture_io { capture.capture(file.path) { load file.path } }
+      assert_includes capture.constants_for(file.path), 'CaptureRaisingAssignedAlias'
+
+      ENV['RUBYCLI_CAPTURE_FAILURE'] = 'yes'
+      capture_io { capture.capture(file.path) { load file.path } }
+
+      refute_includes capture.constants_for(file.path), 'CaptureRaisingAssignedAlias'
+    ensure
+      ENV['RUBYCLI_CAPTURE_FAILURE'] = previous_failure
+      cleanup_constant(:CaptureRaisingAssignedAlias)
+      cleanup_constant(:CaptureRaisingAliasSource)
     end
   end
 
