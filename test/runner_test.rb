@@ -134,6 +134,20 @@ class RunnerTest < Minitest::Test
     assert_match(/Failed to evaluate pre-script/, error.message)
   end
 
+  def test_pre_script_syntax_error_is_wrapped_with_source_context
+    error = assert_raises(Rubycli::Runner::PreScriptError) do
+      Rubycli::Runner.apply_pre_scripts(
+        [{ value: '{', context: '(inline --pre-script)' }],
+        Object,
+        Object
+      )
+    end
+
+    assert_includes error.message, 'Failed to evaluate pre-script'
+    assert_includes error.message, '(inline --pre-script)'
+    assert_includes error.message, 'syntax error'
+  end
+
   def test_strict_mode_requires_explicit_constant_when_names_differ
     Dir.mktmpdir do |dir|
       file = File.join(dir, 'cli_entry.rb')
@@ -152,6 +166,35 @@ class RunnerTest < Minitest::Test
     ensure
       Object.send(:remove_const, :TracePointCapturedRunner) if Object.const_defined?(:TracePointCapturedRunner)
     end
+  end
+
+  def test_explicit_nested_constant_does_not_fall_back_to_ancestor
+    Object.const_set(:InheritedPayload, Class.new)
+
+    Dir.mktmpdir do |dir|
+      file = File.join(dir, 'explicit_constant_host.rb')
+      File.write(file, <<~RUBY)
+        class ExplicitConstantHost
+          def self.run
+            :host
+          end
+        end
+      RUBY
+
+      error = assert_raises(Rubycli::Runner::Error) do
+        Rubycli::Runner.prepare_runner_target(
+          file,
+          'ExplicitConstantHost::InheritedPayload',
+          constant_mode: :strict
+        )
+      end
+
+      assert_includes error.message, 'ExplicitConstantHost::InheritedPayload'
+    ensure
+      Object.send(:remove_const, :ExplicitConstantHost) if Object.const_defined?(:ExplicitConstantHost, false)
+    end
+  ensure
+    Object.send(:remove_const, :InheritedPayload) if Object.const_defined?(:InheritedPayload, false)
   end
 
   def test_error_when_matching_constant_has_no_cli_methods
@@ -466,4 +509,108 @@ class RunnerTest < Minitest::Test
       Object.send(:remove_const, :DocCheckRunner) if Object.const_defined?(:DocCheckRunner)
     end
   end
+
+  def test_check_new_lints_instance_methods_without_instantiating
+    Dir.mktmpdir do |dir|
+      file = File.join(dir, 'side_effect_check_runner.rb')
+      File.write(file, <<~RUBY)
+        class SideEffectCheckRunner
+          def initialize
+            $side_effect_check_runner_initializations += 1
+          end
+
+          # @param name [String] Documented name
+          # @param extra [String] This param does not exist
+          def run(name)
+            name
+          end
+        end
+      RUBY
+
+      $side_effect_check_runner_initializations = 0
+      Rubycli.documentation_registry.reset!
+      Rubycli.environment.clear_documentation_issues!
+
+      status = nil
+      _out, _err = capture_io do
+        status = Rubycli::Runner.check(file, 'SideEffectCheckRunner', new: true)
+      end
+
+      assert_equal 1, status
+      assert_equal 0, $side_effect_check_runner_initializations
+      refute_empty Rubycli.environment.documentation_issues
+    ensure
+      $side_effect_check_runner_initializations = nil
+      Rubycli.documentation_registry.reset!
+      Rubycli.environment.clear_documentation_issues!
+      Rubycli.environment.disable_doc_check!
+      Object.send(:remove_const, :SideEffectCheckRunner) if Object.const_defined?(:SideEffectCheckRunner)
+    end
+  end
+
+  def test_check_rejects_pre_scripts_without_evaluating_them
+    Dir.mktmpdir do |dir|
+      file = File.join(dir, 'pre_script_check_runner.rb')
+      File.write(file, <<~RUBY)
+        class PreScriptCheckRunner
+          def self.run
+            :ok
+          end
+        end
+      RUBY
+
+      $pre_script_check_evaluations = 0
+      Rubycli.environment.enable_doc_check!
+      error = assert_raises(Rubycli::Runner::Error) do
+        Rubycli::Runner.check(
+          file,
+          'PreScriptCheckRunner',
+          pre_scripts: [{ value: '$pre_script_check_evaluations += 1', context: '(inline --pre-script)' }]
+        )
+      end
+
+      assert_includes error.message, '--check cannot be combined with --pre-script'
+      assert_equal 0, $pre_script_check_evaluations
+      assert Rubycli.environment.doc_check_mode?
+    ensure
+      $pre_script_check_evaluations = nil
+      Rubycli.documentation_registry.reset!
+      Rubycli.environment.clear_documentation_issues!
+      Rubycli.environment.disable_doc_check!
+      Object.send(:remove_const, :PreScriptCheckRunner) if Object.const_defined?(:PreScriptCheckRunner)
+    end
+  end
+
+  def test_check_new_ignores_generated_attribute_writers
+    Dir.mktmpdir do |dir|
+      file = File.join(dir, 'accessor_check_runner.rb')
+      File.write(file, <<~RUBY)
+        class AccessorCheckRunner
+          # Writable value.
+          attr_writer :value
+
+          def run
+            :ok
+          end
+        end
+      RUBY
+
+      Rubycli.documentation_registry.reset!
+      Rubycli.environment.clear_documentation_issues!
+
+      status = nil
+      _out, _err = capture_io do
+        status = Rubycli::Runner.check(file, 'AccessorCheckRunner', new: true)
+      end
+
+      assert_equal 0, status
+      assert_empty Rubycli.environment.documentation_issues
+    ensure
+      Rubycli.documentation_registry.reset!
+      Rubycli.environment.clear_documentation_issues!
+      Rubycli.environment.disable_doc_check!
+      Object.send(:remove_const, :AccessorCheckRunner) if Object.const_defined?(:AccessorCheckRunner)
+    end
+  end
+
 end

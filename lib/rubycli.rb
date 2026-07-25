@@ -255,35 +255,27 @@ module Rubycli
       eval_mode: false,
       eval_lax: false
     )
-      raise ArgumentError, 'target_path must be specified' if target_path.nil? || target_path.empty?
       previous_doc_check = Rubycli.environment.doc_check_mode?
+      raise ArgumentError, 'target_path must be specified' if target_path.nil? || target_path.empty?
+      unless Array(pre_scripts).empty?
+        raise Error, '--check cannot be combined with --pre-script or --init'
+      end
+
       Rubycli.environment.clear_documentation_issues!
       Rubycli.environment.enable_doc_check!
 
-      runner_target, full_path = prepare_runner_target(
+      runner_target, full_path = resolve_runner_target(
         target_path,
         class_name,
-        new: new,
-        new_args: new_args,
-        json_mode: json_mode,
-        eval_mode: eval_mode,
-        eval_lax: eval_lax,
-        pre_scripts: pre_scripts,
-        constant_mode: constant_mode
+        constant_mode: constant_mode,
+        instantiate: new
       )
 
       original_program_name = $PROGRAM_NAME
       $PROGRAM_NAME = File.basename(full_path)
 
-      catalog = Rubycli.cli.command_catalog_for(runner_target)
-      Array(catalog&.entries).each do |entry|
-        method_obj = entry&.method
-        Rubycli.documentation_registry.metadata_for(method_obj) if method_obj
-      end
-
-      if catalog&.entries&.empty? && runner_target.respond_to?(:call)
-        method_obj = runner_target.method(:call) rescue nil
-        Rubycli.documentation_registry.metadata_for(method_obj) if method_obj
+      documentation_methods_for(runner_target, full_path, instantiate: new).each do |method_obj|
+        Rubycli.documentation_registry.metadata_for(method_obj)
       end
 
       issues = Rubycli.environment.documentation_issues
@@ -318,6 +310,8 @@ module Rubycli
       end
     rescue Errno::ENOENT
       raise PreScriptError, "Pre-script file not found: #{context}"
+    rescue SyntaxError => e
+      raise PreScriptError, "Failed to evaluate pre-script (#{context}): #{e.message}"
     rescue StandardError => e
       raise PreScriptError, "Failed to evaluate pre-script (#{context}): #{e.message}"
     end
@@ -354,7 +348,7 @@ module Rubycli
       raise Error, "Unable to resolve class/module name: #{name.inspect}" if parts.empty?
 
       parts.reduce(Object) do |context, const_name|
-        context.const_get(const_name)
+        context.const_get(const_name, false)
       end
     rescue NameError
       message = build_missing_constant_message(name, defined_constants, full_path)
@@ -434,6 +428,21 @@ module Rubycli
       pre_scripts: [],
       constant_mode: nil
     )
+      target, full_path = resolve_runner_target(
+        target_path,
+        class_name,
+        constant_mode: constant_mode,
+        instantiate: new
+      )
+
+      initializer_args = new ? parse_initializer_arguments(new_args, target, json_mode: json_mode, eval_mode: eval_mode, eval_lax: eval_lax) : nil
+
+      runner_target = new ? instantiate_target(target, initializer_args) : target
+      runner_target = apply_pre_scripts(pre_scripts, target, runner_target)
+      [runner_target, full_path]
+    end
+
+    def resolve_runner_target(target_path, class_name, constant_mode:, instantiate:)
       full_path = find_target_path(target_path)
       capture = Rubycli.constant_capture
       capture.capture(full_path) { load full_path }
@@ -453,15 +462,34 @@ module Rubycli
                    camelize(File.basename(full_path, '.rb')),
                    candidates,
                    constant_mode,
-                   instantiate: new
+                   instantiate: instantiate
                  )
                end
 
-      initializer_args = new ? parse_initializer_arguments(new_args, target, json_mode: json_mode, eval_mode: eval_mode, eval_lax: eval_lax) : nil
+      [target, full_path]
+    end
 
-      runner_target = new ? instantiate_target(target, initializer_args) : target
-      runner_target = apply_pre_scripts(pre_scripts, target, runner_target)
-      [runner_target, full_path]
+    def documentation_methods_for(target, full_path, instantiate:)
+      unless target.is_a?(Module)
+        catalog = Rubycli.cli.command_catalog_for(target)
+        methods = Array(catalog&.entries).filter_map(&:method)
+        if methods.empty? && target.respond_to?(:call)
+          callable = target.method(:call) rescue nil
+          methods << callable if callable
+        end
+        return methods
+      end
+
+      normalized = normalize_path(full_path)
+      class_methods = collect_defined_methods(target.singleton_class, normalized)
+                      .map { |name| target.method(name) }
+                      .select { |method_obj| Rubycli.cli.send(:exposable_method?, method_obj) }
+      return class_methods unless instantiate
+
+      instance_methods = collect_defined_methods(target, normalized)
+                         .map { |name| target.instance_method(name) }
+                         .select { |method_obj| Rubycli.cli.send(:exposable_method?, method_obj) }
+      target.is_a?(Class) ? instance_methods + class_methods : instance_methods
     end
 
     def build_constant_candidates(path, constant_names)
