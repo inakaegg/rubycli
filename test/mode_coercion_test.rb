@@ -173,4 +173,27 @@ class ModeCoercionTest < Minitest::Test
     assert_includes error.message, 'syntax error'
     refute Rubycli.eval_mode?
   end
+
+  def test_apply_argument_coercions_rejects_json_and_eval_modes_at_the_same_time
+    always_on = Class.new do
+      def json_mode?
+        true
+      end
+
+      def eval_mode?
+        true
+      end
+    end
+
+    controller = Rubycli::ArgumentModeController.new(
+      json_coercer: always_on.new,
+      eval_coercer: always_on.new
+    )
+
+    error = assert_raises(Rubycli::ArgumentError) do
+      controller.apply_argument_coercions(['1'], {})
+    end
+
+    assert_includes error.message, '--json-args cannot be combined with --eval-args'
+  end
 end

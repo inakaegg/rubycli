@@ -11,8 +11,8 @@ class ResultEmitterTest < Minitest::Test
       emitter.emit({ name: 'Ruby', level: 3 })
     end
 
-    assert_includes output, "\"name\": \"Ruby\""
-    assert_includes output, "\"level\": 3"
+    assert_includes output, '"name": "Ruby"'
+    assert_includes output, '"level": 3'
   end
 
   def test_suppresses_output_when_print_flag_disabled
@@ -91,7 +91,7 @@ class ResultEmitterTest < Minitest::Test
       emitter.emit(array_like)
     end
 
-    assert_includes output, "\"name\": \"Ruby\""
+    assert_includes output, '"name": "Ruby"'
     assert_includes output, '"alpha"'
     assert_includes output, '"beta"'
   end

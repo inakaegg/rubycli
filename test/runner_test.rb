@@ -119,7 +119,7 @@ class RunnerTest < Minitest::Test
 
       refute_nil pos_instance
       assert_instance_of InitRunner, pos_instance
-      assert_equal [ ['alpha', 2] ], pos_instance.args
+      assert_equal [['alpha', 2]], pos_instance.args
       assert_equal({}, pos_instance.kwargs)
     ensure
       Object.send(:remove_const, :InitRunner) if Object.const_defined?(:InitRunner)
@@ -312,20 +312,20 @@ class RunnerTest < Minitest::Test
     Dir.mktmpdir do |dir|
       file = File.join(dir, 'init_typed_runner.rb')
       File.write(file, <<~RUBY)
-        class InitTypedRunner
-          attr_reader :items, :flag
+          class InitTypedRunner
+            attr_reader :items, :flag
 
-      # ITEMS [String[]]
-      # --flag [Boolean]
-      def initialize(items, flag: false)
-        @items = items
-        @flag = flag
-      end
-
-          def run
-            { items: items, flag: flag }
-          end
+        # ITEMS [String[]]
+        # --flag [Boolean]
+        def initialize(items, flag: false)
+          @items = items
+          @flag = flag
         end
+
+            def run
+              { items: items, flag: flag }
+            end
+          end
       RUBY
 
       captured = nil
@@ -377,7 +377,10 @@ class RunnerTest < Minitest::Test
       parsed = nil
       run_without_exit = ->(target, *_args) { Rubycli.cli.run(target, ARGV.dup, false) }
       Rubycli.stub(:run, run_without_exit) do
-        Rubycli.stub(:call_target, ->(_method, pos_args, kw_args) { parsed = { pos: pos_args, kw: kw_args }; nil }) do
+        Rubycli.stub(:call_target, lambda { |_method, pos_args, kw_args|
+          parsed = { pos: pos_args, kw: kw_args }
+          nil
+        }) do
           Rubycli::Runner.execute(file, nil, ['combine', '{"foo":1}', 'true'], constant_mode: :strict, eval_args: false, json: true, new: false)
         end
       end
@@ -498,7 +501,10 @@ class RunnerTest < Minitest::Test
       captured = nil
       run_without_exit = ->(target, *_args) { Rubycli.cli.run(target, ARGV.dup, false) }
       Rubycli.stub(:run, run_without_exit) do
-        Rubycli.stub(:call_target, ->(_method, pos_args, _kw_args) { captured = pos_args.first; nil }) do
+        Rubycli.stub(:call_target, lambda { |_method, pos_args, _kw_args|
+          captured = pos_args.first
+          nil
+        }) do
           Rubycli::Runner.execute(
             file,
             nil,
@@ -539,7 +545,7 @@ class RunnerTest < Minitest::Test
       captured = nil
       run_without_exit = ->(target, *_args) { Rubycli.cli.run(target, ARGV.dup, false) }
       Rubycli.stub(:run, run_without_exit) do
-        Rubycli.stub(:call_target, ->(method, pos_args, _kw_args) {
+        Rubycli.stub(:call_target, lambda { |method, pos_args, _kw_args|
           captured = [method.receiver.seed, pos_args.first]
           nil
         }) do
@@ -820,5 +826,4 @@ class RunnerTest < Minitest::Test
       Object.send(:remove_const, :AccessorCheckRunner) if Object.const_defined?(:AccessorCheckRunner)
     end
   end
-
 end

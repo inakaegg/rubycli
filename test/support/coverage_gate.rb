@@ -4,7 +4,8 @@ require 'open3'
 
 module CoverageGate
   CoverageStats = Struct.new(:covered, :total, :uncovered, keyword_init: true)
-  Error = Class.new(StandardError)
+  class Error < StandardError
+  end
 
   module_function
 
@@ -95,9 +96,7 @@ module CoverageGate
       'git', 'merge-base', 'HEAD', base_ref,
       chdir: chdir
     )
-    unless merge_status.success?
-      raise Error, "cannot resolve coverage base #{base_ref.inspect}: #{merge_error.strip}"
-    end
+    raise Error, "cannot resolve coverage base #{base_ref.inspect}: #{merge_error.strip}" unless merge_status.success?
 
     diff, diff_error, diff_status = Open3.capture3(
       'git', 'diff', '--unified=0', '--no-color', merge_base.strip, '--', 'lib',

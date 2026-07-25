@@ -62,4 +62,24 @@ class EnvironmentTest < Minitest::Test
       env.handle_input_violation('bad')
     end
   end
+
+  def test_documentation_issue_without_a_line_number_records_the_file_only
+    env = Rubycli::Environment.new(env: {})
+
+    env.handle_documentation_issue('missing docs', file: File.join(Dir.pwd, 'lib', 'rubycli.rb'))
+
+    issue = env.documentation_issues.first
+    assert_equal 'lib/rubycli.rb', issue[:location]
+    assert_equal 'lib/rubycli.rb missing docs', issue[:message]
+  end
+
+  def test_documentation_issue_without_a_file_records_only_the_message
+    env = Rubycli::Environment.new(env: {})
+
+    env.handle_documentation_issue('missing docs')
+
+    issue = env.documentation_issues.first
+    assert_nil issue[:location]
+    assert_equal 'missing docs', issue[:message]
+  end
 end

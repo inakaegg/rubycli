@@ -73,7 +73,7 @@ class CLITest < Minitest::Test
 
     status = nil
     out, _err = capture_io do
-      status = @cli.run(target, ['info', 'unexpected'], true)
+      status = @cli.run(target, %w[info unexpected], true)
     end
 
     assert_equal 1, status
@@ -240,6 +240,7 @@ class CLITest < Minitest::Test
     assert_equal 'LEVEL', @cli.method_description(method_obj)
   end
 end
+
 module ChoiceDocSamples
   module_function
 

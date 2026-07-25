@@ -19,7 +19,7 @@ class ConstantCaptureTest < Minitest::Test
 
   def test_ignores_constants_from_other_files
     capture = Rubycli::ConstantCapture.new
-    fake_path = File.expand_path('../../lib/rubycli.rb', __FILE__)
+    fake_path = File.expand_path('../lib/rubycli.rb', __dir__)
 
     Tempfile.create(['capture_other', '.rb']) do |file|
       file.write("module CaptureForeignConstant; end\n")
@@ -355,7 +355,7 @@ class ConstantCaptureTest < Minitest::Test
 
   def test_does_not_retain_alias_from_inactive_branch_when_source_is_unchanged
     capture = Rubycli::ConstantCapture.new
-    previous_mode = ENV['RUBYCLI_CAPTURE_MODE']
+    previous_mode = ENV.fetch('RUBYCLI_CAPTURE_MODE', nil)
     Tempfile.create(['unchanged_dynamic_alias', '.rb']) do |file|
       file.write(<<~RUBY)
         module CaptureDynamicAliasSource
@@ -592,7 +592,7 @@ class ConstantCaptureTest < Minitest::Test
 
   def test_does_not_trigger_autoload_while_resolving_const_set_receiver
     capture = Rubycli::ConstantCapture.new
-    previous_marker = ENV['RUBYCLI_AUTOLOAD_CAPTURED']
+    previous_marker = ENV.fetch('RUBYCLI_AUTOLOAD_CAPTURED', nil)
     Tempfile.create(['autoload_side_effect', '.rb']) do |autoload_file|
       autoload_file.write(<<~RUBY)
         ENV['RUBYCLI_AUTOLOAD_CAPTURED'] = 'yes'
@@ -615,7 +615,7 @@ class ConstantCaptureTest < Minitest::Test
         capture_io { capture.capture(target_file.path) { load target_file.path } }
 
         assert_includes capture.constants_for(target_file.path), 'CaptureAutoloadActualRunner'
-        assert_nil ENV['RUBYCLI_AUTOLOAD_CAPTURED']
+        assert_nil ENV.fetch('RUBYCLI_AUTOLOAD_CAPTURED', nil)
       end
     ensure
       ENV['RUBYCLI_AUTOLOAD_CAPTURED'] = previous_marker
@@ -699,7 +699,7 @@ class ConstantCaptureTest < Minitest::Test
 
   def test_does_not_retain_guarded_alias_in_uninvoked_block
     capture = Rubycli::ConstantCapture.new
-    previous_mode = ENV['RUBYCLI_BLOCK_CAPTURE_MODE']
+    previous_mode = ENV.fetch('RUBYCLI_BLOCK_CAPTURE_MODE', nil)
     Tempfile.create(['conditional_block_guarded_alias', '.rb']) do |file|
       file.write(<<~RUBY)
         module CaptureConditionalBlockAliasSource
@@ -774,7 +774,9 @@ class ConstantCaptureTest < Minitest::Test
   end
 
   def test_retains_aliases_initialized_by_loop_existence_guards
-    skip 'Ruby 2.x does not reliably emit loop-condition line events' if Gem::Version.new(RUBY_VERSION) < Gem::Version.new('3.0')
+    if Gem::Version.new(RUBY_VERSION) < Gem::Version.new('3.0')
+      skip 'Ruby 2.x does not reliably emit loop-condition line events'
+    end
 
     capture = Rubycli::ConstantCapture.new
     Tempfile.create(['loop_guarded_aliases', '.rb']) do |file|
@@ -856,7 +858,9 @@ class ConstantCaptureTest < Minitest::Test
 
       refute_includes capture.constants_for(file.path), 'CaptureDeferredConstSetAssignedAlias'
     ensure
-      Object.send(:remove_method, :capture_install_deferred_alias) if Object.private_method_defined?(:capture_install_deferred_alias)
+      if Object.private_method_defined?(:capture_install_deferred_alias)
+        Object.send(:remove_method, :capture_install_deferred_alias)
+      end
       cleanup_constant(:CaptureDeferredConstSetAssignedAlias)
       cleanup_constant(:CaptureDeferredConstSetAliasSource)
     end
@@ -864,7 +868,7 @@ class ConstantCaptureTest < Minitest::Test
 
   def test_does_not_retain_postfix_const_set_when_runtime_guard_changes
     capture = Rubycli::ConstantCapture.new
-    previous_mode = ENV['RUBYCLI_CONST_SET_MODE']
+    previous_mode = ENV.fetch('RUBYCLI_CONST_SET_MODE', nil)
     Tempfile.create(['postfix_const_set_alias', '.rb']) do |file|
       file.write(<<~RUBY)
         module CapturePostfixConstSetAliasSource
@@ -891,7 +895,7 @@ class ConstantCaptureTest < Minitest::Test
 
   def test_does_not_retain_assignment_when_rhs_raises_before_assignment
     capture = Rubycli::ConstantCapture.new
-    previous_failure = ENV['RUBYCLI_CAPTURE_FAILURE']
+    previous_failure = ENV.fetch('RUBYCLI_CAPTURE_FAILURE', nil)
     Tempfile.create(['raising_assignment_alias', '.rb']) do |file|
       file.write(<<~RUBY)
         module CaptureRaisingAliasSource

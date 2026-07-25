@@ -384,7 +384,7 @@ class ArgumentParserTest < Minitest::Test
     end
 
     refute_empty warnings
-    assert warnings.all? { |msg| msg.include?('invalid') || msg.include?('unknown') }
+    assert(warnings.all? { |msg| msg.include?('invalid') || msg.include?('unknown') })
   end
 
   def test_validate_inputs_raises_when_strict_input_enabled
@@ -559,7 +559,7 @@ class ArgumentParserTest < Minitest::Test
 
     pos_args, kw_args = @parser.parse(['123'], method)
 
-    assert_equal [:"123"], pos_args
+    assert_equal [:'123'], pos_args
     assert_empty kw_args
   end
 

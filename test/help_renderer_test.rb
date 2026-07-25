@@ -38,6 +38,15 @@ module OptionalPositionalHelpSamples
   end
 end
 
+module KeyrestHelpSamples
+  module_function
+
+  # NAME [String] Setting to change
+  def configure(**options)
+    options
+  end
+end
+
 class HelpRendererTest < Minitest::Test
   def setup
     environment = Rubycli::Environment.new(env: {}, argv: [])
@@ -153,5 +162,11 @@ class HelpRendererTest < Minitest::Test
     expected_lines = expected.split("\n").map(&:rstrip)
     actual_lines = actual.split("\n").map(&:rstrip)
     assert_equal expected_lines, actual_lines
+  end
+
+  def test_usage_renders_keyword_splat_parameters_as_a_generic_option
+    usage = Rubycli.usage_for_method('configure', KeyrestHelpSamples.method(:configure))
+
+    assert_includes usage, 'Usage: rubycli configure [--<option>...]'
   end
 end

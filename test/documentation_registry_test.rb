@@ -50,6 +50,16 @@ module TaggedOrderSamples
   end
 end
 
+module ReturnShorthandDocSamples
+  module_function
+
+  # NAME [String] Who to greet
+  # return String Rendered greeting
+  def greet(name)
+    "Hello, #{name}"
+  end
+end
+
 class DocumentationRegistryTest < Minitest::Test
   def setup
     @environment = Rubycli::Environment.new(env: {}, argv: [])
@@ -78,7 +88,7 @@ class DocumentationRegistryTest < Minitest::Test
     refute name_doc.inline_type_annotation
 
     options = metadata[:options]
-    assert_equal [:greeting, :shout, :punctuation], options.map(&:keyword)
+    assert_equal %i[greeting shout punctuation], options.map(&:keyword)
 
     greeting_opt = options[0]
     assert_equal '--greeting', greeting_opt.long
@@ -102,7 +112,7 @@ class DocumentationRegistryTest < Minitest::Test
     assert_equal '--punctuation', punctuation_opt.long
     assert_nil punctuation_opt.short
     assert_equal 'PUNCT', punctuation_opt.value_name
-    assert_equal ['String', 'nil'], punctuation_opt.types
+    assert_equal %w[String nil], punctuation_opt.types
     assert punctuation_opt.requires_value
     refute punctuation_opt.boolean_flag
     assert_includes [nil, 'nil'], punctuation_opt.default_value
@@ -156,7 +166,7 @@ class DocumentationRegistryTest < Minitest::Test
     assert_equal 'Number of repetitions', count_doc.description
 
     options = metadata[:options]
-    assert_equal [:style, :tags], options.map(&:keyword)
+    assert_equal %i[style tags], options.map(&:keyword)
 
     style_opt = options.first
     assert_equal '-s', style_opt.short
@@ -187,7 +197,7 @@ class DocumentationRegistryTest < Minitest::Test
     assert_equal '[String]', file_doc.inline_type_text
 
     assert_equal '<pattern>', pattern_doc.label
-    assert_equal ['String', 'nil'], pattern_doc.types
+    assert_equal %w[String nil], pattern_doc.types
     assert pattern_doc.inline_type_annotation
     assert_equal '[String, nil]', pattern_doc.inline_type_text
 
@@ -220,7 +230,7 @@ class DocumentationRegistryTest < Minitest::Test
     assert limit_opt.optional_value
     refute limit_opt.boolean_flag
     refute limit_opt.requires_value
-    assert_equal ['Boolean', 'Integer'], limit_opt.types
+    assert_equal %w[Boolean Integer], limit_opt.types
     assert limit_opt.inline_type_annotation
     assert_equal '[Boolean, Integer]', limit_opt.inline_type_text
   end
@@ -230,10 +240,10 @@ class DocumentationRegistryTest < Minitest::Test
     metadata = @registry.metadata_for(method)
 
     labels = metadata[:positionals].map(&:label)
-    assert_equal ['NAME', 'ATTEMPTS'], labels
+    assert_equal %w[NAME ATTEMPTS], labels
 
     options = metadata[:options]
-    assert_equal [:safe_mode, :tag], options.map(&:keyword)
+    assert_equal %i[safe_mode tag], options.map(&:keyword)
 
     safe_mode = options.first
     assert_equal :auto_generated, safe_mode.doc_format
@@ -282,11 +292,11 @@ class DocumentationRegistryTest < Minitest::Test
     metadata = @registry.metadata_for(ExtraDocSamples::Choices.method(:select))
 
     level_doc = metadata[:positionals].first
-    assert_equal %i[info warn], level_doc.allowed_values.map { |entry| entry[:value] }
+    assert_equal(%i[info warn], level_doc.allowed_values.map { |entry| entry[:value] })
 
     accept_opt = metadata[:options].find { |opt| opt.keyword == :accept }
     refute_nil accept_opt
-    assert_equal %i[official linked_content], accept_opt.allowed_values.map { |entry| entry[:value] }
+    assert_equal(%i[official linked_content], accept_opt.allowed_values.map { |entry| entry[:value] })
     assert_includes accept_opt.types, 'Boolean'
   end
 
@@ -311,7 +321,7 @@ class DocumentationRegistryTest < Minitest::Test
     prefix_opt = metadata[:options].find { |opt| opt.keyword == :prefix }
     refute_nil prefix_opt
     assert_equal '--prefix', prefix_opt.long
-    assert_equal ['String', 'nil'], prefix_opt.types
+    assert_equal %w[String nil], prefix_opt.types
     assert_equal 'Heading for the entry', prefix_opt.description
     assert_equal '[String, nil]', prefix_opt.inline_type_text
   end
@@ -325,7 +335,7 @@ class DocumentationRegistryTest < Minitest::Test
 
     issues = @environment.documentation_issues
     refute_empty issues
-    assert issues.any? { |issue| issue[:message].include?("Unknown type token 'Booalean'") }
+    assert(issues.any? { |issue| issue[:message].include?("Unknown type token 'Booalean'") })
   ensure
     @environment.disable_doc_check!
   end
@@ -339,8 +349,17 @@ class DocumentationRegistryTest < Minitest::Test
 
     issues = @environment.documentation_issues
     refute_empty issues
-    assert issues.any? { |issue| issue[:message].include?("Unknown allowed value token 'WARNNING'") }
+    assert(issues.any? { |issue| issue[:message].include?("Unknown allowed value token 'WARNNING'") })
   ensure
     @environment.disable_doc_check!
+  end
+
+  def test_return_shorthand_line_documents_the_return_value
+    metadata = Rubycli.documentation_registry.metadata_for(ReturnShorthandDocSamples.method(:greet))
+    returns = metadata[:returns]
+
+    assert_equal 1, returns.size
+    assert_equal ['String'], returns.first.types
+    assert_equal 'Rendered greeting', returns.first.description
   end
 end

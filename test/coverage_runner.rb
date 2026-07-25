@@ -97,7 +97,9 @@ Minitest.after_run do
   end
 
   failures = []
-  failures << format('line coverage %.2f%% is below %.2f%%', line_coverage, MIN_LINE_COVERAGE) if line_coverage < MIN_LINE_COVERAGE
+  if line_coverage < MIN_LINE_COVERAGE
+    failures << format('line coverage %.2f%% is below %.2f%%', line_coverage, MIN_LINE_COVERAGE)
+  end
   if branch_coverage < MIN_BRANCH_COVERAGE
     failures << format('branch coverage %.2f%% is below %.2f%%', branch_coverage, MIN_BRANCH_COVERAGE)
   end

@@ -171,7 +171,10 @@ class CommandLineTest < Minitest::Test
 
     captured = nil
     Rubycli::Runner.stub(:execute, ->(*) { flunk 'Runner.execute should not be invoked for --check' }) do
-      Rubycli::Runner.stub(:check, ->(*args, **opts) { captured = { args: args, opts: opts }; 0 }) do
+      Rubycli::Runner.stub(:check, lambda { |*args, **opts|
+        captured = { args: args, opts: opts }
+        0
+      }) do
         status = Rubycli::CommandLine.run(argv)
         assert_equal 0, status
       ensure
