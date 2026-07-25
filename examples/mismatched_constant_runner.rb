@@ -7,6 +7,7 @@
 class FriendlyGreeter
   # NAME [String] Text to display
   # --message MESSAGE [String] Greeting to print (defaults to "Hello")
+  # --quiet [Boolean] Skip the stdout line (the return value is still printed)
   def self.greet(name = 'friend', message: 'Hello', quiet: false)
     output = "#{message}, #{name}!"
     puts(output) unless quiet

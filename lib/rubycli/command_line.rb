@@ -6,20 +6,22 @@ module Rubycli
       Usage: rubycli [--new|-n[=<value>]] [--pre-script=<src>] [--json-args|-j | --eval-args|-e | --eval-lax|-E] [--strict] [--check|-c] <target-path> [<class-or-module>] [-- <cli-args>...]
 
       Examples:
-        rubycli scripts/sample_runner.rb echo --message hello
-        rubycli scripts/sample_runner.rb AlternateRunner greet --name Ruby
-        rubycli --new lib/akiya_fetcher.rb fetch_simplified_html https://example.com
-        rubycli --json-args --new='["a","b"]' examples/new_mode_runner.rb run --mode summary --options '{"source":"json"}'
+        rubycli path/to/greeter.rb greet Hanako
+        rubycli path/to/multi_runner.rb AlternateRunner greet --name Ruby
+        rubycli --auto-target path/to/mismatched_runner.rb greet Hanako
+        rubycli --new='["a","b"]' path/to/collection_runner.rb run --mode summary
+        rubycli --json-args --new='["a","b"]' path/to/collection_runner.rb run --mode '"summary"'
 
       Options:
-        --new, -n [<value>]  Instantiate the class/module before invoking CLI commands; optional constructor arguments can follow (array/hash recommended; respects --json-args/--eval-args/--eval-lax)
+        --new, -n [<value>]  Instantiate the class/module before invoking CLI commands; one optional literal can follow and is bound to the constructor's first parameter (respects --json-args/--eval-args/--eval-lax; use --pre-script for several or keyword arguments)
         --pre-script=<src>   Evaluate Ruby code and use its result as the exposed target (--init alias; also accepts space-separated form)
-        --json-args, -j      Parse all following arguments strictly as JSON (no YAML literals)
-        --eval-args, -e      Evaluate following arguments as Ruby code
+        --json-args, -j      Parse all following arguments strictly as JSON (no YAML literals; even plain words need quoting)
+        --eval-args, -e      Evaluate following arguments as Ruby code (every argument must be valid Ruby)
         --eval-lax, -E       Evaluate as Ruby but fall back to raw strings when parsing fails
         --auto-target, -a    Auto-select the only callable constant when names don't match
         --strict             Enforce documented input types/choices (invalid values abort)
         --check, -c          Validate documentation/comments without executing commands
+        --help, -h           Show this message (the bare word `help` works too)
         (Note: --json-args cannot be combined with --eval-args or --eval-lax)
         (Note: Every option that accepts a value understands both --flag=value and --flag value forms.)
 

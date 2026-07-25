@@ -11,7 +11,7 @@ class NewModeRunner
     @options = options
   end
 
-  # mode [Symbol] 実行モード
+  # --mode MODE [Symbol] 実行モード（summary または reverse）
   def run(mode: :summary)
     case mode.to_sym
     when :summary
@@ -34,11 +34,11 @@ end
 #   rubycli --new='["a","b","c"]' examples/new_mode_runner.rb run --mode reverse
 #   rubycli --new a,b,c examples/new_mode_runner.rb run --mode summary
 #
-#   # コンストラクタ options を JSON で渡す（厳格にパースされる）
-#   rubycli --json-args --new='["a","b"]' examples/new_mode_runner.rb run --mode summary --options '{"source":"json","limit":5}'
+#   # JSON モード: 以降の引数は厳格に JSON として解釈される（裸の単語は不可）
+#   rubycli --json-args --new='["a","b"]' examples/new_mode_runner.rb run
 #
-#   # eval モードで Ruby ハッシュを渡す（シンボルキーなど柔軟に扱える）
-#   rubycli --eval-args --new='["x","y"]' examples/new_mode_runner.rb run --mode summary --options '{retry: 2, tags: [:a, :b]}'
+#   # eval モード: Ruby リテラルを渡せる（すべての引数が有効な Ruby である必要がある）
+#   rubycli --eval-args --new='%w[x y]' examples/new_mode_runner.rb run --mode ':reverse'
 #
-#   # pre-script で初期化する例（ファイル名は任意）
-#   rubycli --pre-script 'NewModeRunner.new(%w[a b c], options: {from: :pre})' examples/new_mode_runner.rb run --mode summary
+#   # --new が渡せる値は 1 つ（= items）だけなので、options: は pre-script で渡す
+#   rubycli --new='["a"]' --pre-script 'NewModeRunner.new(%w[a b c], options: {from: :pre})' examples/new_mode_runner.rb run --mode summary
