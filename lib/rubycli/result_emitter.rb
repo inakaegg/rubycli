@@ -34,7 +34,7 @@ module Rubycli
           result.inspect
         end
       end
-    rescue JSON::GeneratorError
+    rescue JSON::GeneratorError, JSON::NestingError
       result.inspect
     end
   end

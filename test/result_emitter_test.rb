@@ -37,4 +37,17 @@ class ResultEmitterTest < Minitest::Test
 
     assert_equal '', output
   end
+
+  def test_circular_array_falls_back_to_inspect
+    environment = Rubycli::Environment.new(env: { 'RUBYCLI_PRINT_RESULT' => 'true' })
+    emitter = Rubycli::ResultEmitter.new(environment: environment)
+    result = []
+    result << result
+
+    output, _err = capture_io do
+      emitter.emit(result)
+    end
+
+    assert_equal "[[...]]\n", output
+  end
 end

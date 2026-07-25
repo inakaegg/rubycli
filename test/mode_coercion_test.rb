@@ -41,6 +41,19 @@ class ModeCoercionTest < Minitest::Test
     assert_equal({}, kw_args)
   end
 
+  def test_eval_binding_does_not_leak_locals_between_mode_scopes
+    Rubycli.with_eval_mode(true) do
+      assert_equal 41, Rubycli.coerce_eval_value('review_local = 41')
+    end
+
+    observed = nil
+    Rubycli.with_eval_mode(true) do
+      observed = Rubycli.coerce_eval_value('defined?(review_local)')
+    end
+
+    assert_nil observed
+  end
+
   def test_eval_lax_mode_falls_back_to_original_string_on_syntax_error
     pos_args = ['https://example.com/']
     kw_args = { ttl: '60*60*2' }

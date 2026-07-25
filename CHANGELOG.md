@@ -9,6 +9,14 @@
 - Constructor arity errors raised by `--new` are now wrapped in Rubycli's user-facing runner error.
 - Positional type conversion now waits for JSON/eval coercion, matching keyword-option behavior and preserving `--new` JSON/eval inputs.
 - Runner tests now execute without terminating the Minitest process and assert converted command arguments instead of stubbed targets.
+- `--check --new` now inspects exposed instance/class commands without running constructors, while `--check` rejects pre-scripts instead of evaluating them.
+- Explicit nested constant names no longer fall back to inherited top-level constants, and malformed pre-scripts now produce contextual Rubycli errors.
+- Rest, optional-before-required, and trailing-required positional arguments now follow Ruby's argument binding rules for conversion, validation, and help output.
+- Documented scalar/list conversions now preserve numeric-looking strings, handle repeated booleans, return real `DateTime` values, accept JSON arrays, and reject scalar/array values where `JSON`/`Hash` shapes do not allow them.
+- Assignment-like positional values remain positional unless they match a keyword, while matching assignments use the same documented conversion as long options.
+- YARD positional tags are aligned by parameter name instead of comment order.
+- Eval-mode local variables and command-line strict/check/result-output flags no longer leak across separate programmatic runs.
+- Circular arrays/hashes returned by commands now fall back to inspected output instead of raising a JSON nesting error.
 
 ## [0.1.7] - 2025-11-12
 

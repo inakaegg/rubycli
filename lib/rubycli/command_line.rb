@@ -32,6 +32,9 @@ module Rubycli
     module_function
 
     def run(argv = ARGV)
+      previous_doc_check = Rubycli.environment.doc_check_mode?
+      previous_strict_input = Rubycli.environment.strict_input?
+      previous_print_result = Rubycli.environment.print_result?
       args = Array(argv).dup
       Rubycli.environment.enable_print_result!
 
@@ -183,6 +186,24 @@ module Rubycli
     rescue Rubycli::Runner::Error => e
       warn "[ERROR] #{e.message}"
       1
+    ensure
+      if previous_doc_check
+        Rubycli.environment.enable_doc_check!
+      else
+        Rubycli.environment.disable_doc_check!
+      end
+
+      if previous_strict_input
+        Rubycli.environment.enable_strict_input!
+      else
+        Rubycli.environment.disable_strict_input!
+      end
+
+      if previous_print_result
+        Rubycli.environment.enable_print_result!
+      else
+        Rubycli.environment.disable_print_result!
+      end
     end
 
     def likely_new_args_value?(token)

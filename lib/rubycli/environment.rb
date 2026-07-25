@@ -45,6 +45,10 @@ module Rubycli
       @strict_input
     end
 
+    def disable_strict_input!
+      @strict_input = false
+    end
+
     def documentation_issues
       @documentation_issues.dup
     end
@@ -90,6 +94,10 @@ module Rubycli
 
     def enable_print_result!
       @print_result = true
+    end
+
+    def disable_print_result!
+      @print_result = false
     end
 
     private

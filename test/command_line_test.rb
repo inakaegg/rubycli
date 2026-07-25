@@ -184,6 +184,37 @@ class CommandLineTest < Minitest::Test
     assert_equal false, captured[:opts][:new]
   end
 
+  def test_check_mode_does_not_leak_into_a_later_programmatic_run
+    argv = ['--check', 'test/fixtures/doc_examples.rb']
+
+    Rubycli::Runner.stub(:check, 0) do
+      assert_equal 0, Rubycli::CommandLine.run(argv)
+    end
+
+    refute Rubycli.environment.doc_check_mode?
+  end
+
+  def test_strict_mode_does_not_leak_into_a_later_programmatic_run
+    argv = ['--strict', 'test/fixtures/doc_examples.rb']
+
+    Rubycli::Runner.stub(:execute, nil) do
+      assert_equal 0, Rubycli::CommandLine.run(argv)
+    end
+
+    refute Rubycli.environment.strict_input?
+  end
+
+  def test_print_result_mode_does_not_leak_into_a_later_programmatic_run
+    argv = ['test/fixtures/doc_examples.rb']
+    Rubycli.environment.instance_variable_set(:@print_result, false)
+
+    Rubycli::Runner.stub(:execute, nil) do
+      assert_equal 0, Rubycli::CommandLine.run(argv)
+    end
+
+    refute Rubycli.environment.print_result?
+  end
+
   def test_pre_script_allows_space_separated_value
     argv = [
       '--pre-script',
