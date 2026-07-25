@@ -135,6 +135,29 @@ class ConstantCaptureTest < Minitest::Test
     end
   end
 
+  def test_retains_defined_guarded_alias_when_same_file_is_loaded_twice
+    capture = Rubycli::ConstantCapture.new
+    Tempfile.create(['defined_guarded_alias', '.rb']) do |file|
+      file.write(<<~RUBY)
+        module CaptureDefinedGuardedAliasSource
+          def self.run; end
+        end
+        unless defined?(CaptureDefinedGuardedAssignedAlias)
+          CaptureDefinedGuardedAssignedAlias = CaptureDefinedGuardedAliasSource
+        end
+      RUBY
+      file.flush
+
+      2.times do
+        capture_io { capture.capture(file.path) { load file.path } }
+        assert_includes capture.constants_for(file.path), 'CaptureDefinedGuardedAssignedAlias'
+      end
+    ensure
+      cleanup_constant(:CaptureDefinedGuardedAssignedAlias)
+      cleanup_constant(:CaptureDefinedGuardedAliasSource)
+    end
+  end
+
   def test_does_not_retain_assigned_alias_removed_from_edited_source
     capture = Rubycli::ConstantCapture.new
     Tempfile.create(['removed_assigned_alias', '.rb']) do |file|
@@ -539,6 +562,33 @@ class ConstantCaptureTest < Minitest::Test
       Object.send(:remove_method, :capture_install_deferred_alias) if Object.private_method_defined?(:capture_install_deferred_alias)
       cleanup_constant(:CaptureDeferredConstSetAssignedAlias)
       cleanup_constant(:CaptureDeferredConstSetAliasSource)
+    end
+  end
+
+  def test_does_not_retain_postfix_const_set_when_runtime_guard_changes
+    capture = Rubycli::ConstantCapture.new
+    previous_mode = ENV['RUBYCLI_CONST_SET_MODE']
+    Tempfile.create(['postfix_const_set_alias', '.rb']) do |file|
+      file.write(<<~RUBY)
+        module CapturePostfixConstSetAliasSource
+          def self.run; end
+        end
+        Object.const_set(:CapturePostfixConstSetAssignedAlias, CapturePostfixConstSetAliasSource) if ENV['RUBYCLI_CONST_SET_MODE'] == 'on'
+      RUBY
+      file.flush
+
+      ENV['RUBYCLI_CONST_SET_MODE'] = 'on'
+      capture_io { capture.capture(file.path) { load file.path } }
+      assert_includes capture.constants_for(file.path), 'CapturePostfixConstSetAssignedAlias'
+
+      ENV['RUBYCLI_CONST_SET_MODE'] = 'off'
+      capture_io { capture.capture(file.path) { load file.path } }
+
+      refute_includes capture.constants_for(file.path), 'CapturePostfixConstSetAssignedAlias'
+    ensure
+      ENV['RUBYCLI_CONST_SET_MODE'] = previous_mode
+      cleanup_constant(:CapturePostfixConstSetAssignedAlias)
+      cleanup_constant(:CapturePostfixConstSetAliasSource)
     end
   end
 

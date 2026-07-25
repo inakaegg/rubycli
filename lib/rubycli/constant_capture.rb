@@ -268,7 +268,13 @@ module Rubycli
         line = source_line(node)
         # A line event can precede a skipped postfix/short-circuit assignment.
         ambiguous_line = contexts.any? { |context| context[1] == line }
-        definition = { signature: signature, line: line, ambiguous_line: ambiguous_line, persistent: false }
+        persistent = constant_existence_guard?(contexts, assigned_name) && !lazy_context?(contexts)
+        definition = {
+          signature: signature,
+          line: line,
+          ambiguous_line: ambiguous_line,
+          persistent: persistent
+        }
         definitions[assigned_name] = Array(definitions[assigned_name]) | [definition]
       elsif node.is_a?(Array)
         node.each { |child| collect_assignment_targets(child, namespace, definitions, signature, contexts) }
@@ -298,12 +304,13 @@ module Rubycli
       assigned_name = [owner_name, constant_name].reject(&:empty?).join('::')
       signature = [:const_set, nil, contexts.map(&:first)]
       line = source_line(node)
+      ambiguous_line = contexts.any? { |context| context[1] == line }
       definition = {
         signature: signature,
         line: line,
-        ambiguous_line: false,
+        ambiguous_line: ambiguous_line,
         persistent: contexts.empty? ||
-          (const_defined_guard?(contexts, assigned_name) && !lazy_context?(contexts))
+          (constant_existence_guard?(contexts, assigned_name) && !lazy_context?(contexts))
       }
       definitions[assigned_name] = Array(definitions[assigned_name]) | [definition]
     end
@@ -342,13 +349,23 @@ module Rubycli
       node&.first == :var_ref && node.dig(1, 0) == :@const && node.dig(1, 1) == 'Object'
     end
 
-    def const_defined_guard?(contexts, assigned_name)
+    def constant_existence_guard?(contexts, assigned_name)
       constant_name = assigned_name.split('::').last
       contexts.any? do |context, _line|
         has_method = find_syntax_token(context) { |_type, value| value == 'const_defined?' }
         has_constant = find_syntax_token(context) { |_type, value| value == constant_name }
-        has_method && has_constant
+        defined_guard = syntax_node_with_token?(context, :defined, constant_name)
+        (has_method && has_constant) || defined_guard
       end
+    end
+
+    def syntax_node_with_token?(node, node_type, token_value)
+      return false unless node.is_a?(Array)
+      if node.first == node_type
+        return true if find_syntax_token(node) { |_type, value| value == token_value }
+      end
+
+      node.any? { |child| syntax_node_with_token?(child, node_type, token_value) }
     end
 
     def lazy_context?(contexts)

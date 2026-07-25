@@ -5,7 +5,7 @@
 ### Fixed
 - Parameterless commands now reject unexpected arguments without invoking the target method or attempting implicit return-value traversal.
 - Required options now report a missing value instead of consuming the following option token, while explicit values such as `true` remain valid.
-- Required options accept negative exponent notation such as `-1e3` without mistaking it for another option.
+- Required options accept negative exponent and radix notation such as `-1e3` and `-0x10` without mistaking them for another option.
 - Constant discovery now includes classes and modules assigned with `Class.new` / `Module.new` during the target file load.
 - Repeated loads retain assigned constant aliases when the source file is unchanged.
 - Repeated loads after source edits retain aliases created by direct, guarded, multiple, and `const_set` assignments while their active definitions remain, without reviving aliases behind newly disabled conditions.

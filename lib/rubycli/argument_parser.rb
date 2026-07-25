@@ -785,9 +785,11 @@ module Rubycli
       return false unless token
       return false if token == '--' || token == '-'
 
-      token.start_with?('-') && !token.match?(
-        /\A-(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?\z/
+      negative_decimal = token.match?(/\A-(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?\z/)
+      negative_radix = token.match?(
+        /\A-0(?:[xX][0-9a-fA-F_]+|[bB][01_]+|[oO][0-7_]+|[dD][0-9_]+)\z/
       )
+      token.start_with?('-') && !negative_decimal && !negative_radix
     end
   end
 end

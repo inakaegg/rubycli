@@ -101,6 +101,15 @@ module JsonTypeSamples
   end
 end
 
+module IntegerOptionSamples
+  module_function
+
+  # --count VALUE [Integer] Required count
+  def count(count:)
+    count
+  end
+end
+
 module ScalarTypeSamples
   module_function
 
@@ -426,6 +435,23 @@ class ArgumentParserTest < Minitest::Test
 
     assert_empty pos_args
     assert_equal BigDecimal('-1e3'), kw_args[:budget]
+  end
+
+  def test_required_integer_option_accepts_negative_radix_values
+    method = IntegerOptionSamples.method(:count)
+
+    {
+      '-0x10' => -16,
+      '-0x1_0' => -16,
+      '-0b10' => -2,
+      '-0o10' => -8,
+      '-0d10' => -10
+    }.each do |token, expected|
+      pos_args, kw_args = @parser.parse(['--count', token], method)
+
+      assert_empty pos_args
+      assert_equal({ count: expected }, kw_args)
+    end
   end
 
   def test_json_type_accepts_an_array_literal
