@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'set'
 
 module Rubycli
@@ -76,6 +78,15 @@ module Rubycli
       command_catalog(target)
     end
 
+    # True when the method can be exposed as a CLI command. Rubycli::Runner uses
+    # this to lint the same methods the CLI would expose.
+    def exposable_method?(method_obj)
+      return false unless method_obj&.source_location
+      return false if accessor_generated_method?(method_obj)
+
+      true
+    end
+
     private
 
     def debug_log(message)
@@ -101,7 +112,7 @@ module Rubycli
 
     def handle_missing_method(target, catalog, command, args, cli_mode)
       if target.respond_to?(:call)
-        debug_log "Target is callable, treating as lambda/proc"
+        debug_log 'Target is callable, treating as lambda/proc'
         args.unshift(command)
         execute_callable(target, args, command, cli_mode)
       else
@@ -178,13 +189,11 @@ module Rubycli
     end
 
     def handle_execution_error(error, command, method_obj, pos_args, kw_args, cli_mode)
-      if cli_mode && !arguments_match?(method_obj, pos_args, kw_args) && usage_error?(error)
-        puts "Error: #{error.message}"
-        puts usage_for_method(command, method_obj)
-        1
-      else
-        raise error
-      end
+      raise error unless cli_mode && !arguments_match?(method_obj, pos_args, kw_args) && usage_error?(error)
+
+      puts "Error: #{error.message}"
+      puts usage_for_method(command, method_obj)
+      1
     end
 
     def usage_error?(error)
@@ -277,7 +286,9 @@ module Rubycli
 
     def collect_class_methods(target)
       klass = target.class
-      collect_method_map(klass.singleton_class.public_instance_methods(false)) { |name| safe_method_lookup(klass, name) }
+      collect_method_map(klass.singleton_class.public_instance_methods(false)) do |name|
+        safe_method_lookup(klass, name)
+      end
     end
 
     def collect_method_map(method_names)
@@ -293,13 +304,6 @@ module Rubycli
       target.method(name)
     rescue NameError
       nil
-    end
-
-    def exposable_method?(method_obj)
-      return false unless method_obj&.source_location
-      return false if accessor_generated_method?(method_obj)
-
-      true
     end
 
     def build_alias_map(entries)
