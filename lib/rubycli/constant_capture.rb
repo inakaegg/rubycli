@@ -447,6 +447,10 @@ module Rubycli
         [context[1], true]
       when :unless_mod
         [context[1], false]
+      when :while, :while_mod
+        [context[1], true]
+      when :until, :until_mod
+        [context[1], false]
       when :ifop
         [context[2], context[1] == :then]
       when :binary
@@ -594,7 +598,7 @@ module Rubycli
       when :@const
         (namespace + [node[1]]).join('::')
       when :const_path_field, :const_path_ref
-        parent_name = constant_name_from_node(node[1], namespace)
+        parent_name = receiver_constant_name_from_node(node[1], namespace)
         child_name = node.dig(2, 1)
         [parent_name, child_name].compact.join('::')
       when :top_const_field, :top_const_ref

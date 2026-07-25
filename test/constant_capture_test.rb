@@ -773,6 +773,61 @@ class ConstantCaptureTest < Minitest::Test
     end
   end
 
+  def test_retains_aliases_initialized_by_loop_existence_guards
+    skip 'Ruby 2.x does not reliably emit loop-condition line events' if Gem::Version.new(RUBY_VERSION) < Gem::Version.new('3.0')
+
+    capture = Rubycli::ConstantCapture.new
+    Tempfile.create(['loop_guarded_aliases', '.rb']) do |file|
+      file.write(<<~RUBY)
+        module CaptureLoopGuardSource
+          def self.run; end
+        end
+        while !defined?(CaptureWhileGuardAlias)
+          CaptureWhileGuardAlias = CaptureLoopGuardSource
+        end
+        CaptureUntilGuardAlias = CaptureLoopGuardSource until defined?(CaptureUntilGuardAlias)
+      RUBY
+      file.flush
+
+      2.times do
+        capture_io { capture.capture(file.path) { load file.path } }
+        assert_includes capture.constants_for(file.path), 'CaptureWhileGuardAlias'
+        assert_includes capture.constants_for(file.path), 'CaptureUntilGuardAlias'
+      end
+    ensure
+      cleanup_constant(:CaptureWhileGuardAlias)
+      cleanup_constant(:CaptureUntilGuardAlias)
+      cleanup_constant(:CaptureLoopGuardSource)
+    end
+  end
+
+  def test_retains_namespace_qualified_defined_guard
+    capture = Rubycli::ConstantCapture.new
+    Tempfile.create(['namespace_qualified_guard', '.rb']) do |file|
+      file.write(<<~RUBY)
+        module CaptureQualifiedGuardSource
+          def self.run; end
+        end
+        module CaptureQualifiedGuardNamespace
+          Runner = CaptureQualifiedGuardSource unless defined?(CaptureQualifiedGuardNamespace::Runner)
+        end
+      RUBY
+      file.flush
+
+      2.times do
+        capture_io { capture.capture(file.path) { load file.path } }
+        assert_includes capture.constants_for(file.path), 'CaptureQualifiedGuardNamespace::Runner'
+      end
+    ensure
+      if Object.const_defined?(:CaptureQualifiedGuardNamespace)
+        owner = Object.const_get(:CaptureQualifiedGuardNamespace)
+        owner.send(:remove_const, :Runner) if owner.const_defined?(:Runner, false)
+      end
+      cleanup_constant(:CaptureQualifiedGuardNamespace)
+      cleanup_constant(:CaptureQualifiedGuardSource)
+    end
+  end
+
   def test_does_not_retain_const_set_moved_into_uninvoked_method
     capture = Rubycli::ConstantCapture.new
     Tempfile.create(['deferred_const_set_alias', '.rb']) do |file|
