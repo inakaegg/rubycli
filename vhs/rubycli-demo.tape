@@ -57,7 +57,9 @@
 
 Output assets/rubycli-demo.gif
 
-Require rubycli
+# Record from the checkout (exe/rubycli + lib/) so the GIF matches this revision.
+# Run from the repository root: vhs vhs/rubycli-demo.tape
+Require ruby
 
 Set Shell "bash"
 Set FontSize 32
@@ -68,13 +70,13 @@ Set Padding 32
 Set TypingSpeed 80ms
 Set WindowBar "Rings"
 
-# Type "clear"
-# Enter
-# Sleep 500ms
-
+Hide
+Type "export PATH=$PWD/exe:$PATH RUBYOPT=-I$PWD/lib"
+Enter
 Type "clear"
 Enter
 Sleep 500ms
+Show
 
 Type "rubycli examples/hello_app.rb"
 Enter

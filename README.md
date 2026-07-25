@@ -1,6 +1,6 @@
 # Rubycli — Python Fire-inspired CLI for Ruby
 
-![Rubycli logo](assets/rubycli-logo.png)
+![Rubycli logo](https://raw.githubusercontent.com/inakaegg/rubycli/main/assets/rubycli-logo.png)
 
 [![Gem Version](https://img.shields.io/gem/v/rubycli)](https://rubygems.org/gems/rubycli)
 
@@ -17,7 +17,7 @@ conventions and type annotations.
 
 > 🇯🇵 Japanese documentation: [README.ja.md](README.ja.md)
 
-![Rubycli demo showing generated commands and invocation](assets/rubycli-demo.gif)
+![Rubycli demo showing generated commands and invocation](https://raw.githubusercontent.com/inakaegg/rubycli/main/assets/rubycli-demo.gif)
 
 ## Installation
 
@@ -121,13 +121,16 @@ module HelloApp
 end
 ```
 
-The documented variant lives at `examples/hello_app_with_docs.rb`. Its file
-name does not match the constant it defines (`HelloApp`), so pass
-`--auto-target` / `-a` or name the constant explicitly — see
+The documented variant lives at `examples/hello_app_with_docs.rb`. The module is
+still called `HelloApp`, so the file adds `HelloAppWithDocs = HelloApp` at the
+bottom to keep a constant that matches the file name; that is why it runs
+without extra flags. When a file has no matching constant, see
 [Target constant resolution](#target-constant-resolution) below.
+(Rubycli 0.1.7 does not detect that alias yet, so add `--auto-target` / `-a` if
+you are still on the released gem.)
 
 ```bash
-rubycli -a examples/hello_app_with_docs.rb greet --help
+rubycli examples/hello_app_with_docs.rb greet --help
 ```
 
 ```text
@@ -141,7 +144,7 @@ Options:
 ```
 
 ```bash
-rubycli -a examples/hello_app_with_docs.rb greet --shout Hanako
+rubycli examples/hello_app_with_docs.rb greet --shout Hanako
 #=> HELLO, HANAKO!
 ```
 
@@ -205,13 +208,23 @@ constant:
 | `auto` | `--auto-target` / `-a` / `RUBYCLI_AUTO_TARGET=auto` | If exactly one constant in the file defines CLI-callable methods, it is selected automatically. |
 
 You can always name the constant explicitly after the file path — useful when a
-file defines several candidates or a nested constant:
+file defines several candidates or a nested constant. Two bundled files
+demonstrate both situations: `examples/multi_constant_runner.rb` defines
+`MultiConstantRunner` plus `HelperRunner`, and
+`examples/mismatched_constant_runner.rb` defines only `FriendlyGreeter`.
 
 ```bash
-rubycli scripts/multi_runner.rb Admin::Runner list --active
+# pick a non-matching constant explicitly (works in the default strict mode)
+rubycli examples/multi_constant_runner.rb HelperRunner inspect
+#=> Helper invoked
+
+# or let auto mode select the single callable constant
+rubycli -a examples/mismatched_constant_runner.rb greet Hanako --message Hi
+#=> Hi, Hanako!
 ```
 
-Nested constants such as `Module1::Inner::Runner` are found as well.
+Nested constants such as `Outer::Inner::Runner` are found as well; pass the
+fully qualified name after the file path.
 
 ## Instance-only classes and `--new`
 
@@ -221,9 +234,14 @@ no CLI-callable methods.
 
 - `--new` also makes instance methods appear in `--help` output, and lets
   `rubycli --check --new` lint their documentation.
-- When the constructor needs arguments, pass them with `--new=VALUE` **before
-  the file path**. Values are parsed as safe YAML/JSON-like literals, and
+- When the constructor needs an argument, pass it with `--new=VALUE` **before
+  the file path**. The value is parsed as a safe YAML/JSON-like literal, and
   comments on `initialize` drive type coercion just like regular CLI methods.
+- `--new=VALUE` supplies exactly **one** value, bound to the constructor's first
+  parameter: `--new='["a","b","c"]'` hands over that array as a single argument.
+  Arrays are not spread across several parameters and hashes do not become
+  keyword arguments — reach for `--pre-script` when the constructor needs more
+  than one argument or keyword arguments.
 - Prefer the `--new=VALUE` form over a space-separated `--new VALUE`, so the
   value is not mistaken for the file path.
 
@@ -231,8 +249,18 @@ Example (`examples/new_mode_runner.rb`):
 
 ```bash
 rubycli --new='["a","b","c"]' examples/new_mode_runner.rb run --mode reverse
-#=> ["c", "b", "a"]
 ```
+
+```text
+[
+  "c",
+  "b",
+  "a"
+]
+```
+
+Return values are rendered as pretty-printed JSON when a command returns a
+structure instead of printing it.
 
 ## Comment syntax
 
@@ -351,9 +379,12 @@ currently ignored by the help renderer.
   line.
 - Bullet lists or free-form lines following a `@param` line are not used for
   CLI generation; put supplementary text in the option's description instead.
-- To enforce the concise placeholder syntax exclusively, set
-  `RUBYCLI_ALLOW_PARAM_COMMENT=OFF`; `@param`/`@return` tags then produce
-  warnings, which helps a gradual migration.
+- To migrate towards the concise placeholder syntax, set
+  `RUBYCLI_ALLOW_PARAM_COMMENT=OFF` and run `rubycli --check`: every `@param`
+  line is then reported as a documentation issue (and ignored for that lint
+  run), so you can see what still needs rewriting. It is a linting switch, not
+  a runtime restriction — normal runs keep honouring `@param` unchanged, and
+  `@return` is never affected.
 
 ### When docs are missing or incomplete
 
@@ -403,7 +434,10 @@ about positional mismatches. For a runnable mismatch demo:
 Run `rubycli --check path/to/script.rb` during development to lint
 documentation drift — including undefined type labels and enum typos, with
 DidYouMean suggestions — and pass `--strict` at runtime when invalid input
-should abort instead of merely warning.
+should abort instead of merely warning. `--check` still loads the target file to
+inspect live signatures, so top-level code runs (`examples/hello_app_with_require.rb`
+calls `Rubycli.run` on load, for instance); what it skips is executing the
+selected command.
 
 > `--strict` trusts whatever types/choices your comments spell out. Keep
 > `rubycli --check` in CI so documentation typos are caught before production
@@ -422,6 +456,11 @@ this stage (a later pass normalises them into arrays when the docs declare
 text, so `"2024-01-01"` remains a string and malformed payloads still reach
 your method instead of killing the run.
 
+When an argument is documented as a plain `[String]`, the documented conversion
+wins over literal parsing and the raw token is handed over verbatim — quote
+characters included. `--prefix '"quoted"'` therefore arrives as `"quoted"` with
+the quotes, while an undocumented parameter would receive `quoted`.
+
 ### JSON mode (`--json-args` / `-j`)
 
 Parses subsequent arguments strictly as JSON. YAML-only syntax is rejected and
@@ -436,10 +475,18 @@ handy for objects that are awkward as JSON — symbol arrays, ranges, inline
 math:
 
 ```bash
-rubycli -E scripts/report_runner.rb publish \
-  --targets '[:marketing, :sales]' \
-  --channels '[:email, :slack]'
+# symbols and %w literals reach the method as real objects
+rubycli -e --new='%w[x y]' examples/new_mode_runner.rb run --mode ':reverse'
+#=> ["y", "x"]
+
+# inline math is evaluated before the documented type conversion runs
+rubycli -e examples/documentation_style_showcase.rb canonical '"Foo"' '2*3'
+#=> {"style": "canonical", "subject": "Foo", "count": 6, ...}
 ```
+
+Under `--eval-args` **every** argument must be valid Ruby, so a bare word such
+as `--mode summary` aborts; write `':summary'` (or `'"summary"'`) instead, or
+switch to `--eval-lax` below.
 
 Evaluation happens inside an isolated binding
 (`Object.new.instance_eval { binding }`). All eval arguments in one Runner
@@ -451,7 +498,13 @@ Programmatic equivalent: `Rubycli.with_eval_mode(true) { ... }`.
 `--eval-lax` / `-E` behaves like `--eval-args`, but tokens that fail to parse
 as Ruby (for example a bare `https://example.com`) produce a warning and are
 forwarded as the original string — convenient for mixing expressions like
-`60*60*24*14` with plain values.
+`60*60*24*14` with plain values:
+
+```bash
+rubycli -E examples/hello_app.rb greet https://example.com
+#=> [WARN] Failed to evaluate argument as Ruby (...). Passing it through because --eval-lax is enabled.
+#=> Hello, https://example.com!
+```
 
 `--json-args` cannot be combined with either eval variant; Rubycli raises an
 error if both are present.
@@ -480,14 +533,16 @@ rubycli --new='["a"]' \
 | Flag / Env | Description | Default |
 | ---------- | ----------- | ------- |
 | `--auto-target` / `-a`, `RUBYCLI_AUTO_TARGET=auto` | Auto-select the target constant when the file name does not match | `strict` |
-| `--new[=VALUE]` | Instantiate the class before resolving commands; `VALUE` feeds the constructor | off |
+| `--new[=VALUE]` / `-n[=VALUE]` | Instantiate the class before resolving commands; `VALUE` feeds the constructor's first parameter | off |
 | `--pre-script SRC` / `--init SRC` | Run Ruby code to build/replace the exposed object | off |
-| `--check` | Lint documentation/comments without executing commands | off |
+| `--check` / `-c` | Lint documentation/comments without executing commands | off |
 | `--strict` | Enforce documented types/choices; invalid input aborts | off |
 | `--json-args` / `-j` | Parse arguments strictly as JSON | off |
 | `--eval-args` / `-e`, `--eval-lax` / `-E` | Evaluate arguments as Ruby (lax: fall back to the raw string) | off |
+| `--help` / `-h` / `help` | Print the `rubycli` usage message | — |
+| `--print-result`, `RUBYCLI_PRINT_RESULT=true` | Print command return values. The bundled `rubycli` executable already does this, so the flag matters only when you embed `Rubycli.run` yourself | on for `rubycli`, off for `Rubycli.run` |
 | `RUBYCLI_DEBUG=true` | Print debug logs | `false` |
-| `RUBYCLI_ALLOW_PARAM_COMMENT=OFF` | Disable YARD `@param` lines (on by default for compatibility) | `ON` |
+| `RUBYCLI_ALLOW_PARAM_COMMENT=OFF` | Report YARD `@param` lines as issues during `rubycli --check` (no effect on normal runs) | `ON` |
 
 ## Library helpers
 
@@ -541,7 +596,15 @@ rubycli --new='["a"]' \
 - `examples/documentation_style_showcase.rb` — every comment notation in one
   script
 - `examples/fallback_example.rb` / `examples/fallback_example_with_extra_docs.rb`
-  — signature fallback and doc-mismatch demos
+  — signature fallback and doc-mismatch demos (these two intentionally fail
+  `rubycli --check`)
+- `examples/multi_constant_runner.rb` / `examples/mismatched_constant_runner.rb`
+  — constant selection: several candidates in one file, and a file whose
+  constant does not match its name
+
+The commands in this README assume you run them from the repository root. The
+same files ship inside the gem, so after `gem install rubycli` you can locate
+them with `gem contents rubycli`.
 
 ## Development verification
 

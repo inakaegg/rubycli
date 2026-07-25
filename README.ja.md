@@ -1,6 +1,6 @@
 # Rubycli — Python Fire 風の Ruby 向け CLI
 
-![Rubycli ロゴ](assets/rubycli-logo.png)
+![Rubycli ロゴ](https://raw.githubusercontent.com/inakaegg/rubycli/main/assets/rubycli-logo.png)
 
 [![Gem Version](https://img.shields.io/gem/v/rubycli)](https://rubygems.org/gems/rubycli)
 
@@ -15,7 +15,7 @@ Rubycli は、既存の Ruby クラス／モジュールをそのままコマン
 
 > English documentation: [README.md](README.md)
 
-![Rubycli のデモ（コマンド生成と実行の様子）](assets/rubycli-demo.gif)
+![Rubycli のデモ（コマンド生成と実行の様子）](https://raw.githubusercontent.com/inakaegg/rubycli/main/assets/rubycli-demo.gif)
 
 ## インストール
 
@@ -119,12 +119,15 @@ end
 ```
 
 ドキュメント付きの版は `examples/hello_app_with_docs.rb` として同梱しています。
-このファイル名は定義している定数（`HelloApp`）と一致しないため、実行時に
-`--auto-target` / `-a` を付けるか、定数名を明示してください
-（詳細は後述の[対象定数の解決](#対象定数の解決)を参照）。
+モジュール名は `HelloApp` のままなので、ファイル末尾に
+`HelloAppWithDocs = HelloApp` を置いてファイル名と一致する定数を用意しています。
+そのため追加のフラグなしで実行できます。一致する定数がないファイルの扱いは
+後述の[対象定数の解決](#対象定数の解決)を参照してください。
+（この別名の検出は Rubycli 0.1.7 では未対応です。公開済みの 0.1.7 を使っている場合は
+`--auto-target` / `-a` を付けてください。）
 
 ```bash
-rubycli -a examples/hello_app_with_docs.rb greet --help
+rubycli examples/hello_app_with_docs.rb greet --help
 ```
 
 ```text
@@ -138,7 +141,7 @@ Options:
 ```
 
 ```bash
-rubycli -a examples/hello_app_with_docs.rb greet --shout Hanako
+rubycli examples/hello_app_with_docs.rb greet --shout Hanako
 #=> HELLO, HANAKO!
 ```
 
@@ -200,13 +203,21 @@ Rubycli は「ファイル名を CamelCase にした定数」を公開対象と�
 | `auto` | `--auto-target` / `-a` / `RUBYCLI_AUTO_TARGET=auto` | CLI として実行できる定数がファイル内に 1 つだけなら自動選択します。 |
 
 ファイルパスの後ろに定数名を明示することもできます。1 ファイルに候補が複数ある場合や、
-ネストした定数を選びたい場合に便利です。
+ネストした定数を選びたい場合に便利です。同梱サンプルでは
+`examples/multi_constant_runner.rb` が `MultiConstantRunner` と `HelperRunner` を、
+`examples/mismatched_constant_runner.rb` が `FriendlyGreeter` だけを定義しています。
 
 ```bash
-rubycli scripts/multi_runner.rb Admin::Runner list --active
+# ファイル名と一致しない定数を明示（既定の strict モードでも動く）
+rubycli examples/multi_constant_runner.rb HelperRunner inspect
+#=> Helper invoked
+
+# auto モードなら候補が 1 つだけのファイルを自動選択
+rubycli -a examples/mismatched_constant_runner.rb greet Hanako --message Hi
+#=> Hi, Hanako!
 ```
 
-`Module1::Inner::Runner` のようなネストした定数も検出できます。
+`Outer::Inner::Runner` のようなネストした定数も、完全修飾名を渡せば検出できます。
 
 ## インスタンスメソッド専用クラスと `--new`
 
@@ -218,6 +229,10 @@ CLI から呼び出せません（Rubycli から見えるコマンドが 1 つ�
 - コンストラクタに引数が必要な場合は、**ファイルパスより前に** `--new=VALUE` の形で渡します。
   値は安全な YAML/JSON ライクなリテラルとして解釈され、`initialize` に付けたコメントも
   通常の CLI メソッドと同様に型変換へ反映されます。
+- `--new=VALUE` が渡せるのは **値 1 つだけ** で、コンストラクタの第 1 引数に束縛されます。
+  `--new='["a","b","c"]'` はこの配列を 1 個の引数として渡します。配列が複数の引数へ
+  展開されたり、ハッシュがキーワード引数になったりはしません。引数が 2 つ以上必要な場合や
+  キーワード引数を渡したい場合は `--pre-script` を使ってください。
 - スペース区切りの `--new VALUE` は値がファイルパスと誤認されやすいため、
   `--new=VALUE` の形を推奨します。
 
@@ -225,8 +240,17 @@ CLI から呼び出せません（Rubycli から見えるコマンドが 1 つ�
 
 ```bash
 rubycli --new='["a","b","c"]' examples/new_mode_runner.rb run --mode reverse
-#=> ["c", "b", "a"]
 ```
+
+```text
+[
+  "c",
+  "b",
+  "a"
+]
+```
+
+コマンドが構造を返した場合、戻り値は整形済み JSON として出力されます。
 
 ## コメント記法
 
@@ -336,8 +360,11 @@ rubycli examples/typed_arguments_demo.rb ingest \
   すべて `--long-name PLACEHOLDER [Type] 説明` の行として明示してください。
 - `@param` 行に続く箇条書きや補足行は CLI 生成には使われません。補足情報は
   オプションの説明文に含めてください。
-- 簡潔なプレースホルダ記法へ統一したい場合は `RUBYCLI_ALLOW_PARAM_COMMENT=OFF` を
-  設定します。`@param`/`@return` タグが警告扱いになり、段階的に移行できます。
+- 簡潔なプレースホルダ記法へ移行したい場合は `RUBYCLI_ALLOW_PARAM_COMMENT=OFF` を設定して
+  `rubycli --check` を実行します。`@param` 行がドキュメント不整合として報告され（その lint
+  実行中は無視され）、書き換えが必要な箇所を洗い出せます。これは lint 用のスイッチであり
+  実行時の制限ではありません。通常実行では `@param` は従来どおり有効で、`@return` は
+  この設定の対象外です。
 
 ### コメントが不足している場合
 
@@ -385,7 +412,10 @@ Options:
 
 開発中は `rubycli --check 対象.rb` でコメントと実装のズレ（未定義の型ラベルや列挙値の
 誤記を含む。DidYouMean の候補付き）を検出し、実行時に `--strict` を付ければ仕様外の
-入力を警告ではなくエラーにできます。
+入力を警告ではなくエラーにできます。なお `--check` も実際のシグネチャを読むために対象
+ファイルを load するため、トップレベルのコードは実行されます（例えば
+`examples/hello_app_with_require.rb` は load 時に `Rubycli.run` を呼びます）。
+`--check` が行わないのは、選択したコマンドの実行です。
 
 > `--strict` はコメントに書かれた型・許容値をそのまま信頼します。コメント自体の誤記は
 > 実行時には検出できないため、CI で `rubycli --check` を回した上で `--strict` を
@@ -402,6 +432,11 @@ Options:
 解釈できない形式は元の文字列にフォールバックします。`"2024-01-01"` は文字列のまま届き、
 構文が崩れた入力でも実行全体は落ちません。
 
+引数が素の `[String]` としてドキュメント化されている場合は、リテラル解析よりコメント由来の
+変換が優先され、入力トークンがそのまま渡ります（引用符も含む）。そのため
+`--prefix '"quoted"'` は引用符付きの `"quoted"` として届き、注釈のない引数なら
+`quoted` として届きます。
+
 ### JSON モード（`--json-args` / `-j`）
 
 後続の引数を厳格に JSON として解釈します。YAML 固有の記法は拒否され、無効な JSON は
@@ -414,10 +449,18 @@ Options:
 JSON では書きにくい値に便利です。
 
 ```bash
-rubycli -E scripts/report_runner.rb publish \
-  --targets '[:marketing, :sales]' \
-  --channels '[:email, :slack]'
+# シンボルや %w リテラルがそのままオブジェクトとして届く
+rubycli -e --new='%w[x y]' examples/new_mode_runner.rb run --mode ':reverse'
+#=> ["y", "x"]
+
+# インライン計算は、コメント由来の型変換より先に評価される
+rubycli -e examples/documentation_style_showcase.rb canonical '"Foo"' '2*3'
+#=> {"style": "canonical", "subject": "Foo", "count": 6, ...}
 ```
+
+`--eval-args` では **すべての引数** が有効な Ruby でなければならないため、
+`--mode summary` のような裸の単語はエラーになります。`':summary'`（または
+`'"summary"'`）と書くか、後述の `--eval-lax` を使ってください。
 
 評価は隔離された binding（`Object.new.instance_eval { binding }`）内で行われます。
 1回の Runner 実行では、`--new=VALUE` のコンストラクタ引数と選択したコマンドの引数を含む
@@ -428,6 +471,12 @@ rubycli -E scripts/report_runner.rb publish \
 `--eval-lax` / `-E` は `--eval-args` と同様に eval モードを有効にしつつ、Ruby として
 解釈できなかったトークン（例: 素の `https://example.com`）は警告を出して元の文字列の
 まま渡します。`60*60*24*14` のような式と通常の文字列を混在させたいときに便利です。
+
+```bash
+rubycli -E examples/hello_app.rb greet https://example.com
+#=> [WARN] Failed to evaluate argument as Ruby (...). Passing it through because --eval-lax is enabled.
+#=> Hello, https://example.com!
+```
 
 `--json-args` と eval 系フラグは同時指定できません（両方あるとエラーになります）。
 
@@ -455,14 +504,16 @@ rubycli --new='["a"]' \
 | フラグ / 環境変数 | 説明 | 既定値 |
 | ---------------- | ---- | ------ |
 | `--auto-target` / `-a`, `RUBYCLI_AUTO_TARGET=auto` | ファイル名と定数名が一致しないときに自動選択 | `strict` |
-| `--new[=VALUE]` | コマンド解決前にインスタンス化。`VALUE` はコンストラクタ引数 | off |
+| `--new[=VALUE]` / `-n[=VALUE]` | コマンド解決前にインスタンス化。`VALUE` はコンストラクタの第 1 引数 | off |
 | `--pre-script SRC` / `--init SRC` | 公開対象オブジェクトを Ruby コードで構築・差し替え | off |
-| `--check` | コメントと実装のズレを検査（コマンドは実行しない） | off |
+| `--check` / `-c` | コメントと実装のズレを検査（コマンドは実行しない） | off |
 | `--strict` | ドキュメントの型・許容値を強制。仕様外入力はエラー | off |
 | `--json-args` / `-j` | 引数を厳格に JSON として解釈 | off |
 | `--eval-args` / `-e`, `--eval-lax` / `-E` | 引数を Ruby として評価（lax は失敗時に素の文字列へフォールバック） | off |
+| `--help` / `-h` / `help` | `rubycli` の使い方を表示 | — |
+| `--print-result`, `RUBYCLI_PRINT_RESULT=true` | 戻り値を標準出力へ表示。同梱の `rubycli` コマンドでは既定で有効なので、`Rubycli.run` を自分のスクリプトへ組み込む場合に効く | `rubycli` は on、`Rubycli.run` は off |
 | `RUBYCLI_DEBUG=true` | デバッグログを表示 | `false` |
-| `RUBYCLI_ALLOW_PARAM_COMMENT=OFF` | YARD `@param` 行を無効化（互換性のため既定は有効） | `ON` |
+| `RUBYCLI_ALLOW_PARAM_COMMENT=OFF` | `rubycli --check` 実行時に YARD `@param` 行を不整合として報告（通常実行には影響しない） | `ON` |
 
 ## ライブラリ API
 
@@ -510,7 +561,14 @@ rubycli --new='["a"]' \
 - `examples/new_mode_runner.rb` — `--new=VALUE` で初期化するインスタンス専用クラス
 - `examples/documentation_style_showcase.rb` — 全コメント記法のショーケース
 - `examples/fallback_example.rb` / `examples/fallback_example_with_extra_docs.rb`
-  — シグネチャからの補完とコメント不一致のデモ
+  — シグネチャからの補完とコメント不一致のデモ（この 2 つは意図的に
+  `rubycli --check` に落ちます）
+- `examples/multi_constant_runner.rb` / `examples/mismatched_constant_runner.rb`
+  — 定数選択のデモ（1 ファイルに複数候補がある場合と、ファイル名と定数名が
+  一致しない場合）
+
+本 README のコマンドはリポジトリ直下での実行を前提にしています。同じファイルは gem にも
+同梱されているため、`gem install rubycli` 後は `gem contents rubycli` で場所を確認できます。
 
 ## 開発時の検証
 

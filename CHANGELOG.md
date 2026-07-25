@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+### Changed
+- `rubycli --help` no longer shows example invocations that referenced files outside this repository; the JSON/eval samples now use forms that actually parse.
+- The gem package ships `examples/*.rb`, so the walkthrough in both READMEs also works from an installed gem.
+- `changelog_uri` in the gemspec points at `CHANGELOG.md` instead of the (empty) GitHub Releases page, and the LICENSE copyright year matches the first release (2025).
+
+### Documentation
+- Corrected the `--auto-target` guidance: `examples/hello_app_with_docs.rb` defines a matching constant alias, so it runs without `-a`; the constant-selection walkthrough now uses `examples/multi_constant_runner.rb` and `examples/mismatched_constant_runner.rb`.
+- `RUBYCLI_ALLOW_PARAM_COMMENT=OFF` is documented as a `rubycli --check` lint switch: it does not change normal runs and never applies to `@return`.
+- Documented the previously missing `-n`, `-c`, `--help`, and `--print-result` / `RUBYCLI_PRINT_RESULT` entries in the flag tables.
+- Clarified that `--new=VALUE` supplies exactly one value, bound to the constructor's first parameter, and corrected the 0.1.7 entry that claimed arrays and hashes expand into positional and keyword arguments.
+- Documented that arguments annotated as plain `[String]` skip literal parsing and keep surrounding quote characters, and that `--eval-args` requires every argument to be valid Ruby.
+- Replaced non-existent `scripts/*.rb` paths in both READMEs with bundled examples, and re-recorded the demo GIF, which still advertised the `--debug` flag removed in 0.1.5 along with pre-0.1.2 help formatting.
+- Fixed the JSON, eval, and pre-script command examples in `examples/new_mode_runner.rb`, which could not run as written, and documented `--mode` there and `--quiet` in `examples/mismatched_constant_runner.rb` so both pass `rubycli --check`.
+
 ### Fixed
 - Parameterless commands now reject unexpected arguments without invoking the target method or attempting implicit return-value traversal.
 - Required options now report a missing value instead of consuming the following option token, while explicit values such as `true` remain valid.
@@ -30,6 +44,7 @@
 - Circular arrays/hashes returned by commands now fall back to inspected output instead of raising a JSON nesting error.
 
 ### Testing
+- Added a documentation path check asserting that repository paths referenced by both READMEs, the changelog, and the CLI usage text exist.
 - Added dependency-free overall line, branch, and changed-line coverage gates plus GitHub Actions checks spanning the supported Ruby range.
 - Changed-line coverage now treats new library files that were never loaded by the test suite as uncovered, including non-ASCII paths quoted by Git.
 - Push coverage compares against the previous commit and falls back to the default branch when a new ref has no previous commit or a ref is deleted.
@@ -37,7 +52,7 @@
 ## [0.1.7] - 2025-11-12
 
 ### Added
-- `--new` now optionally accepts constructor arguments inline (e.g., `--new=[...]`); YAML/JSON-like literals are safely parsed, and `--json-args` / `--eval-args` / `--eval-lax` still apply. Arrays become positional args, hashes become keyword args.
+- `--new` now optionally accepts a constructor argument inline (e.g., `--new=[...]`); YAML/JSON-like literals are safely parsed, and `--json-args` / `--eval-args` / `--eval-lax` still apply. The value is bound to the constructor's first parameter, so `--new='["a","b"]'` passes that array as a single argument (corrected in [Unreleased]: the original note claimed arrays and hashes expand into positional and keyword arguments).
 - Positional argument coercion now runs through the same type-conversion pipeline as options/`--new`, including comment-driven array/element coercion and strict-mode validation; new tests cover arrays, hashes, booleans, and `--new` with JSON/eval modes.
 - Added `examples/new_mode_runner.rb` to showcase `--new` with constructor args, eval/JSON modes, and pre-script initialization for instance-only classes.
 - Strengthened tests for `--eval-lax` success/fallback with `--new` and end-to-end positional Hash coercion to guard against regressions.

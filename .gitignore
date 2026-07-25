@@ -1,3 +1,4 @@
 tmp/
 .ruby-lsp/
 *.gem
+.DS_Store

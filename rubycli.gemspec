@@ -15,13 +15,15 @@ Gem::Specification.new do |spec|
 
   spec.metadata["homepage_uri"] = spec.homepage if spec.homepage
   spec.metadata["documentation_uri"] = "#{spec.homepage}#readme" if spec.homepage
-  spec.metadata["changelog_uri"] = "#{spec.homepage}/releases" if spec.homepage
+  spec.metadata["changelog_uri"] = "#{spec.homepage}/blob/main/CHANGELOG.md" if spec.homepage
   spec.metadata["bug_tracker_uri"] = "#{spec.homepage}/issues" if spec.homepage
 
   spec.required_ruby_version = ">= 3.0"
 
+  # examples/ is shipped because both READMEs walk through those files.
   spec.files = Dir.glob("lib/**/*") +
                Dir.glob("exe/*") +
+               Dir.glob("examples/*.rb") +
                %w[README.md README.ja.md CHANGELOG.md LICENSE]
   spec.bindir = "exe"
   spec.executables = ["rubycli"]
