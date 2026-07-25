@@ -570,15 +570,24 @@ rubycli --new='["a"]' \
 本 README のコマンドはリポジトリ直下での実行を前提にしています。同じファイルは gem にも
 同梱されているため、`gem install rubycli` 後は `gem contents rubycli` で場所を確認できます。
 
-## 開発時の検証
-
-全テストを実行し、リポジトリのカバレッジ基準
-（全体 line 90%、branch 70%、`origin/main` から変更した実行可能行 90%）
-を検査するには次を実行します。
+## 開発
 
 ```bash
-ruby -Ilib:test test/coverage_runner.rb
+bundle install     # minitest / rake / rubocop（Rubycli 本体に実行時依存はありません）
+bundle exec rake   # テスト + RuboCop
 ```
+
+個別のタスク:
+
+- `bundle exec rake test` — Minitest 一式（実際の `exe/rubycli` を子プロセスで起動する
+  E2E テストを含む）
+- `bundle exec rake lint` — RuboCop。未修正の指摘は `.rubocop_todo.yml` で管理しています
+  （大半はパーサ側のメソッド長メトリクス）
+- `bundle exec rake coverage` — テストに加えてリポジトリのカバレッジ基準
+  （全体 line 90%、branch 70%、`origin/main` から変更した実行可能行 90%）を検査
+
+カバレッジゲートは外部依存なしで動くため、Bundler なしの
+`ruby -Ilib:test test/coverage_runner.rb` でも実行できます。
 
 ## ライセンス
 

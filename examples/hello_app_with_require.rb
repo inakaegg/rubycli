@@ -1,5 +1,6 @@
 # frozen_string_literal: true
-require "rubycli"
+
+require 'rubycli'
 
 module HelloApp
   module_function

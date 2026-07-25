@@ -103,7 +103,7 @@ module DocumentationStyleShowcase
         count: count,
         prefix: prefix,
         tags: tags,
-        quiet: quiet,
+        quiet: quiet
       }
     end
   end

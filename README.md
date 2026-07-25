@@ -606,15 +606,25 @@ The commands in this README assume you run them from the repository root. The
 same files ship inside the gem, so after `gem install rubycli` you can locate
 them with `gem contents rubycli`.
 
-## Development verification
-
-Run the full test suite and enforce the repository's coverage thresholds
-(90% overall line coverage, 70% branch coverage, and 90% coverage of
-executable lines changed from `origin/main`) with:
+## Development
 
 ```bash
-ruby -Ilib:test test/coverage_runner.rb
+bundle install     # minitest, rake, rubocop — Rubycli itself has no runtime dependencies
+bundle exec rake   # test suite + RuboCop
 ```
+
+Individual tasks:
+
+- `bundle exec rake test` — Minitest suite, including subprocess tests that drive
+  the real `exe/rubycli`
+- `bundle exec rake lint` — RuboCop; `.rubocop_todo.yml` tracks the offenses that
+  are not fixed yet (mostly method-length metrics in the parsers)
+- `bundle exec rake coverage` — the suite plus the repository coverage thresholds
+  (90% overall line coverage, 70% branch coverage, and 90% coverage of executable
+  lines changed from `origin/main`)
+
+The coverage gate is dependency-free, so `ruby -Ilib:test test/coverage_runner.rb`
+also works without Bundler.
 
 ## License
 

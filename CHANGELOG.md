@@ -2,7 +2,16 @@
 
 ## [Unreleased]
 
+### Added
+- Gemfile, Rakefile, and gemspec development dependencies, so a fresh clone runs `bundle install && bundle exec rake` (test suite plus RuboCop).
+- RuboCop configuration with a generated `.rubocop_todo.yml`, plus a lint job in GitHub Actions.
+- End-to-end tests that run the shipped `exe/rubycli` in a subprocess and assert exit codes, stdout, and stderr.
+
 ### Changed
+- `Rubycli::Runner` moved from `lib/rubycli.rb` into `lib/rubycli/runner.rb`, and `Rubycli::CommandLine.run` was split into flag parsing, target extraction, validation, and dispatch steps.
+- `Rubycli::CLI#exposable_method?` is public API now; the runner used to reach into it with `send`.
+- Every library file carries the `frozen_string_literal` magic comment, and string literals follow one style across the repository.
+- The unused repository-root `rubycli.rb` entry point was removed together with the `$LOADED_FEATURES` workaround it needed; use `exe/rubycli` (or the installed `rubycli` executable) instead.
 - `rubycli --help` no longer shows example invocations that referenced files outside this repository; the JSON/eval samples now use forms that actually parse.
 - The gem package ships `examples/*.rb`, so the walkthrough in both READMEs also works from an installed gem.
 - `changelog_uri` in the gemspec points at `CHANGELOG.md` instead of the (empty) GitHub Releases page, and the LICENSE copyright year matches the first release (2025).
@@ -44,6 +53,7 @@
 - Circular arrays/hashes returned by commands now fall back to inspected output instead of raising a JSON nesting error.
 
 ### Testing
+- Added tests for previously uncovered behaviour: the `return Type Description` comment shorthand, documentation issues reported without a file or line, keyword-splat usage rendering, placeholder type inference, and the json/eval mutual-exclusion guard.
 - Added a documentation path check asserting that repository paths referenced by both READMEs, the changelog, and the CLI usage text exist.
 - Added dependency-free overall line, branch, and changed-line coverage gates plus GitHub Actions checks spanning the supported Ruby range.
 - Changed-line coverage now treats new library files that were never loaded by the test suite as uncovered, including non-ASCII paths quoted by Git.

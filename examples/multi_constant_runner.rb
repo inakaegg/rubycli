@@ -6,14 +6,14 @@
 #   rubycli examples/multi_constant_runner.rb HelperRunner inspect
 class HelperRunner
   def self.inspect
-    puts("Helper invoked")
+    puts('Helper invoked')
     :helper
   end
 end
 
 class MultiConstantRunner
   # TEXT [String] Message to display
-  def self.echo(text = "hello")
+  def self.echo(text = 'hello')
     puts(text)
     text
   end
