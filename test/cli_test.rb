@@ -92,6 +92,153 @@ class CLITest < Minitest::Test
     assert_includes out, 'Usage:'
     assert_equal '', err
   end
+
+  def test_top_level_help_lists_available_commands_without_invoking_them
+    target = Module.new do
+      def self.greet(name)
+        "Hello, #{name}"
+      end
+    end
+
+    status = nil
+    out, err = capture_io do
+      status = @cli.run(target, ['--help'])
+    end
+
+    assert_equal 0, status
+    assert_includes out, 'Available commands:'
+    assert_includes out, 'greet'
+    assert_equal '', err
+  end
+
+  def test_run_invokes_a_documented_command_with_converted_arguments
+    received = nil
+    target = Module.new do
+      define_singleton_method(:repeat) do |count|
+        received = count
+        count * 2
+      end
+    end
+
+    status = @cli.run(target, %w[repeat 3])
+
+    assert_equal 0, status
+    assert_equal 3, received
+  end
+
+  def test_missing_command_prints_help_for_non_callable_target
+    target = Module.new do
+      def self.available
+        :ok
+      end
+    end
+
+    status = nil
+    out, _err = capture_io do
+      status = @cli.run(target, ['missing'])
+    end
+
+    assert_equal 1, status
+    assert_includes out, "Command 'missing' is not available."
+    assert_includes out, 'available'
+  end
+
+  def test_callable_target_receives_reconstructed_keyword_arguments
+    received = nil
+    target = lambda do |name:, loud: false|
+      received = [name, loud]
+      :ok
+    end
+
+    status = @cli.run(target, %w[--name Ruby --loud])
+
+    assert_equal 0, status
+    assert_equal ['Ruby', true], received
+  end
+
+  def test_missing_required_argument_returns_usage_in_cli_mode
+    target = Module.new do
+      def self.greet(name)
+        name
+      end
+    end
+
+    status = nil
+    out, _err = capture_io do
+      status = @cli.run(target, ['greet'], true)
+    end
+
+    assert_equal 1, status
+    assert_includes out, 'wrong number of arguments'
+    assert_includes out, 'Usage: rubycli greet'
+  end
+
+  def test_application_argument_error_is_not_reclassified_as_usage_error
+    target = Module.new do
+      def self.explode(value)
+        raise ::ArgumentError, "wrong number of arguments inside #{value}"
+      end
+    end
+
+    error = assert_raises(::ArgumentError) do
+      @cli.run(target, %w[explode payload], true)
+    end
+
+    assert_includes error.message, 'inside payload'
+  end
+
+  def test_hyphenated_command_resolves_to_snake_case_method
+    target = Module.new do
+      def self.hello_world
+        :ok
+      end
+    end
+
+    method_obj = @cli.find_method(target, 'hello-world')
+
+    assert_equal :hello_world, method_obj.name
+    assert_equal target.method(:hello_world), method_obj
+  end
+
+  def test_instance_catalog_exposes_duplicate_instance_and_class_commands
+    klass = Class.new do
+      def run
+        :instance
+      end
+
+      def self.run
+        :class
+      end
+    end
+    target = klass.new
+
+    catalog = @cli.command_catalog_for(target)
+
+    assert_equal %w[class::run run], catalog.commands.sort
+    assert_equal ['run'], catalog.duplicates
+    assert_equal :instance, catalog.lookup('instance::run').method.call
+    assert_equal :class, catalog.lookup('class::run').method.call
+    assert_equal ['run'], catalog.entries_for(:instance).map(&:command)
+  end
+
+  def test_generated_accessors_are_not_exposed_as_commands
+    klass = Class.new do
+      attr_accessor :value
+
+      def run
+        :ok
+      end
+    end
+
+    assert_equal ['run'], @cli.available_commands(klass.new)
+  end
+
+  def test_usage_and_description_delegate_to_documented_method_renderer
+    method_obj = ChoiceDocSamples.method(:report)
+
+    assert_includes @cli.usage_for_method('report', method_obj), 'Usage: rubycli report LEVEL'
+    assert_equal 'LEVEL', @cli.method_description(method_obj)
+  end
 end
 module ChoiceDocSamples
   module_function

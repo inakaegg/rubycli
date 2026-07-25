@@ -1,0 +1,49 @@
+name: Test
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Ruby ${{ matrix.ruby }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby:
+          - "3.0"
+          - "3.2"
+          - "3.4"
+          - "4.0"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@ec02537da5712d66d4d50a0f33b7eb52773b5ed1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+      - name: Run tests
+        run: ruby -Ilib:test -e 'Dir["test/*_test.rb"].sort.each { |file| require_relative file }'
+
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          fetch-depth: 0
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@ec02537da5712d66d4d50a0f33b7eb52773b5ed1
+        with:
+          ruby-version: "3.4"
+      - name: Enforce coverage thresholds
+        run: ruby -Ilib:test test/coverage_runner.rb
+        env:
+          COVERAGE_BASE_REF: origin/${{ github.base_ref || github.event.repository.default_branch }}

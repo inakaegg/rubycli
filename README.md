@@ -539,6 +539,16 @@ rubycli --new='["a"]' \
 - `examples/fallback_example.rb` / `examples/fallback_example_with_extra_docs.rb`
   — signature fallback and doc-mismatch demos
 
+## Development verification
+
+Run the full test suite and enforce the repository's coverage thresholds
+(90% overall line coverage, 70% branch coverage, and 90% coverage of
+executable lines changed from `origin/main`) with:
+
+```bash
+ruby -Ilib:test test/coverage_runner.rb
+```
+
 ## License
 
 MIT. See [LICENSE](LICENSE).

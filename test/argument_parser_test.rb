@@ -172,6 +172,15 @@ class ArgumentParserTest < Minitest::Test
     assert_equal({ greeting: true }, kw_args)
   end
 
+  def test_double_dash_preserves_following_option_like_values_as_positionals
+    callable = ->(*values) { values }
+
+    pos_args, kw_args = @parser.parse(['--', '--literal', 'name=value'], callable)
+
+    assert_equal ['--literal', 'name=value'], pos_args
+    assert_empty kw_args
+  end
+
   def test_undocumented_required_keyword_rejects_following_option_as_its_value
     method = UndocumentedKeywordSamples.method(:call)
 

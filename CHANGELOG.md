@@ -16,7 +16,11 @@
 - Assignment-like positional values remain positional unless they match a keyword, while matching assignments use the same documented conversion as long options.
 - YARD positional tags are aligned by parameter name instead of comment order.
 - Eval-mode local variables and command-line strict/check/result-output flags no longer leak across separate programmatic runs.
+- Invalid Ruby syntax passed through strict eval mode now produces a user-facing Rubycli argument error instead of leaking a `SyntaxError` backtrace.
 - Circular arrays/hashes returned by commands now fall back to inspected output instead of raising a JSON nesting error.
+
+### Testing
+- Added dependency-free overall line, branch, and changed-line coverage gates plus GitHub Actions checks spanning the supported Ruby range.
 
 ## [0.1.7] - 2025-11-12
 

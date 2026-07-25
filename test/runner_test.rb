@@ -4,6 +4,58 @@ require 'test_helper'
 require 'tmpdir'
 
 class RunnerTest < Minitest::Test
+  def test_execute_rejects_json_and_eval_modes_before_loading_target
+    error = assert_raises(Rubycli::Runner::Error) do
+      Rubycli::Runner.execute('missing-target.rb', json: true, eval_args: true)
+    end
+
+    assert_includes error.message, '--json-args cannot be combined'
+    refute_includes error.message, 'File not found'
+  end
+
+  def test_instantiate_target_supports_keyword_constructor_arguments
+    target = Class.new do
+      attr_reader :name
+
+      def initialize(name:)
+        @name = name
+      end
+    end
+
+    instance = Rubycli::Runner.instantiate_target(target, [[], { name: 'Ruby' }])
+
+    assert_instance_of target, instance
+    assert_equal 'Ruby', instance.name
+  end
+
+  def test_instantiate_target_extends_modules_and_preserves_plain_objects
+    extension = Module.new do
+      def greeting
+        'hello'
+      end
+    end
+    plain_target = Object.new
+
+    extended = Rubycli::Runner.instantiate_target(extension)
+
+    assert_equal 'hello', extended.greeting
+    assert_same plain_target, Rubycli::Runner.instantiate_target(plain_target)
+  end
+
+  def test_find_target_path_adds_rb_extension_and_reports_missing_file
+    Dir.mktmpdir do |dir|
+      path_without_extension = File.join(dir, 'extension_runner')
+      File.write("#{path_without_extension}.rb", "# runner\n")
+
+      assert_equal "#{path_without_extension}.rb", Rubycli::Runner.find_target_path(path_without_extension)
+
+      error = assert_raises(Rubycli::Runner::Error) do
+        Rubycli::Runner.find_target_path(File.join(dir, 'missing'))
+      end
+      assert_includes error.message, 'File not found'
+    end
+  end
+
   def test_execute_infers_constant_and_instantiates_when_new_flag
     Dir.mktmpdir do |dir|
       file = File.join(dir, 'sample_runner.rb')

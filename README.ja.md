@@ -508,6 +508,16 @@ rubycli --new='["a"]' \
 - `examples/fallback_example.rb` / `examples/fallback_example_with_extra_docs.rb`
   — シグネチャからの補完とコメント不一致のデモ
 
+## 開発時の検証
+
+全テストを実行し、リポジトリのカバレッジ基準
+（全体 line 90%、branch 70%、`origin/main` から変更した実行可能行 90%）
+を検査するには次を実行します。
+
+```bash
+ruby -Ilib:test test/coverage_runner.rb
+```
+
 ## ライセンス
 
 MIT。[LICENSE](LICENSE) を参照してください。
