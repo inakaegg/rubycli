@@ -1,4 +1,5 @@
 require 'did_you_mean'
+require 'ripper'
 
 require_relative 'type_utils'
 require_relative 'arguments/token_stream'
@@ -30,6 +31,9 @@ module Rubycli
       cli_aliases = build_cli_alias_map(option_defs)
       option_lookup = build_option_lookup(option_defs)
       type_converters = build_type_converter_map(option_defs)
+      known_option_names = (
+        kw_param_names + cli_aliases.keys + option_lookup.keys.map(&:to_s)
+      ).uniq
 
       stream = Arguments::TokenStream.new(args)
 
@@ -52,7 +56,8 @@ module Rubycli
             cli_aliases,
             option_lookup,
             type_converters,
-            required_kw_param_names
+            required_kw_param_names,
+            known_option_names
           )
         elsif assignment_token_for_method?(token, method, kw_param_names)
           stream.advance
@@ -122,7 +127,8 @@ module Rubycli
       cli_aliases,
       option_lookup,
       type_converters,
-      required_kw_param_names
+      required_kw_param_names,
+      known_option_names
     )
       token =~ /\A-{1,2}([a-zA-Z0-9_-]+)(?:=(.*))?\z/
       cli_key = Regexp.last_match(1).tr('-', '_')
@@ -149,10 +155,11 @@ module Rubycli
                         capture_option_value(
                           option_meta,
                           stream,
-                          requires_value
+                          requires_value,
+                          known_option_names
                         )
                       elsif requires_value
-                        capture_required_option_value(option_label, stream)
+                        capture_required_option_value(option_label, stream, known_option_names)
                       elsif (next_token = stream.current) && !looks_like_option?(next_token)
                         stream.consume
                       else
@@ -173,16 +180,18 @@ module Rubycli
       kw_args[final_key_sym] = converted_value
     end
 
-    def capture_required_option_value(option_label, stream)
+    def capture_required_option_value(option_label, stream, known_option_names)
       next_token = stream.current
-      if next_token.nil? || looks_like_option?(next_token)
+      option_like_value = looks_like_option?(next_token) &&
+        !valid_eval_option_value?(next_token, known_option_names)
+      if next_token.nil? || option_like_value
         raise ArgumentError, "Option '#{option_label}' requires a value"
       end
 
       stream.consume
     end
 
-    def capture_option_value(option_meta, stream, requires_value)
+    def capture_option_value(option_meta, stream, requires_value, known_option_names)
       if option_meta[:boolean_flag]
         if (next_token = stream.current) && TypeUtils.boolean_string?(next_token)
           return stream.consume
@@ -196,12 +205,28 @@ module Rubycli
       elsif requires_value == false
         return 'true'
       elsif requires_value
-        return capture_required_option_value(option_meta.long, stream)
+        return capture_required_option_value(option_meta.long, stream, known_option_names)
       elsif (next_token = stream.current) && !looks_like_option?(next_token)
         return stream.consume
       else
         return 'true'
       end
+    end
+
+    def valid_eval_option_value?(token, known_option_names)
+      return false unless Rubycli.eval_mode?
+      return false if known_option_token?(token, known_option_names)
+
+      !Ripper.sexp(token).nil?
+    end
+
+    def known_option_token?(token, known_option_names)
+      return false unless token&.match?(/\A-{1,2}[a-zA-Z0-9_-]+\z/)
+
+      key = token.delete_prefix('--').delete_prefix('-').tr('-', '_')
+      return true if known_option_names.include?(key)
+
+      known_option_names.one? { |name| name.start_with?(key) }
     end
 
     def process_assignment_token(token, kw_args, option_lookup, type_converters)

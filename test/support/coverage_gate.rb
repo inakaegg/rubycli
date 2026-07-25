@@ -16,6 +16,7 @@ module CoverageGate
     diff.each_line do |line|
       if line.start_with?('+++ ')
         path = line.delete_prefix('+++ ').strip
+        path = decode_git_path(path)
         current_path = path == '/dev/null' ? nil : path.delete_prefix('b/')
         current_path = nil unless current_path&.start_with?(path_prefix)
         next
@@ -40,6 +41,24 @@ module CoverageGate
     end
 
     lines_by_path.transform_values { |lines| lines.uniq.sort }
+  end
+
+  def decode_git_path(path)
+    return path unless path.start_with?('"') && path.end_with?('"')
+
+    escaped = path.byteslice(1, path.bytesize - 2).b
+    decoded = escaped.gsub(/\\(?:[0-7]{3}|.)/n) do |sequence|
+      escape = sequence.byteslice(1..)
+      if escape.match?(/\A[0-7]{3}\z/)
+        [escape.to_i(8)].pack('C')
+      else
+        {
+          'a' => "\a", 'b' => "\b", 't' => "\t", 'n' => "\n",
+          'v' => "\v", 'f' => "\f", 'r' => "\r", '\\' => '\\', '"' => '"'
+        }.fetch(escape, escape)
+      end
+    end
+    decoded.force_encoding(Encoding::UTF_8)
   end
 
   def coverage_stats(changed_lines_by_path, line_hits_by_path)

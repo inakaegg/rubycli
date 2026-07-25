@@ -110,6 +110,14 @@ module IntegerOptionSamples
   end
 end
 
+module EvalRequiredOptionSamples
+  module_function
+
+  def run(callback:, verbose: false)
+    [callback, verbose]
+  end
+end
+
 module ScalarTypeSamples
   module_function
 
@@ -338,6 +346,30 @@ class ArgumentParserTest < Minitest::Test
       assert_equal('subject', pos_args.first)
       assert_equal({ tags: '[:alpha, :beta]' }, kw_args)
     end
+  end
+
+  def test_eval_mode_accepts_option_looking_required_values
+    method = EvalRequiredOptionSamples.method(:run)
+
+    Rubycli.with_eval_mode(true) do
+      _pos_args, lambda_args = @parser.parse(['--callback', '-> { 42 }'], method)
+      _pos_args, unary_args = @parser.parse(['--callback', '-some_value'], method)
+
+      assert_equal({ callback: '-> { 42 }' }, lambda_args)
+      assert_equal({ callback: '-some_value' }, unary_args)
+    end
+  end
+
+  def test_eval_mode_does_not_consume_known_option_as_required_value
+    method = EvalRequiredOptionSamples.method(:run)
+
+    error = assert_raises(Rubycli::ArgumentError) do
+      Rubycli.with_eval_mode(true) do
+        @parser.parse(['--callback', '--verbose'], method)
+      end
+    end
+
+    assert_includes error.message, "Option '--callback' requires a value"
   end
 
   def test_validate_inputs_warns_when_values_outside_choices

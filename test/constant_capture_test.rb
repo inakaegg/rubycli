@@ -558,6 +558,38 @@ class ConstantCaptureTest < Minitest::Test
     end
   end
 
+  def test_resolves_const_set_receiver_through_lexical_fallback
+    capture = Rubycli::ConstantCapture.new
+    Tempfile.create(['fallback_const_set_alias', '.rb']) do |file|
+      file.write(<<~RUBY)
+        module CaptureFallbackConstSetSource
+          def self.run; end
+        end
+        module CaptureFallbackConstSetRoot
+          module Owner; end
+        end
+        module CaptureFallbackConstSetNamespace
+          CaptureFallbackConstSetRoot::Owner.const_set(:Runner, CaptureFallbackConstSetSource) unless CaptureFallbackConstSetRoot::Owner.const_defined?(:Runner, false)
+        end
+      RUBY
+      file.flush
+
+      2.times do
+        capture_io { capture.capture(file.path) { load file.path } }
+        assert_includes capture.constants_for(file.path), 'CaptureFallbackConstSetRoot::Owner::Runner'
+      end
+    ensure
+      if Object.const_defined?(:CaptureFallbackConstSetRoot)
+        root = Object.const_get(:CaptureFallbackConstSetRoot)
+        owner = root.const_get(:Owner, false) if root.const_defined?(:Owner, false)
+        owner.send(:remove_const, :Runner) if owner&.const_defined?(:Runner, false)
+      end
+      cleanup_constant(:CaptureFallbackConstSetNamespace)
+      cleanup_constant(:CaptureFallbackConstSetRoot)
+      cleanup_constant(:CaptureFallbackConstSetSource)
+    end
+  end
+
   def test_does_not_match_existence_guard_for_another_namespace
     capture = Rubycli::ConstantCapture.new
     Tempfile.create(['qualified_guard_alias', '.rb']) do |file|

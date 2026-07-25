@@ -14,7 +14,6 @@ module Rubycli
       normalized_file = normalize(file)
       previous_names = @captured[normalized_file].dup
       previous_assignment_definitions = @assignment_definitions.fetch(normalized_file, {})
-      current_assignment_definitions = assigned_constant_definitions(normalized_file)
       executed_line_contexts = Hash.new { |hash, line| hash[line] = [] }
       assignment_events = Hash.new { |hash, line| hash[line] = [] }
       observed_events = []
@@ -32,6 +31,7 @@ module Rubycli
     ensure
       trace&.disable
       if normalized_file && before_snapshot
+        current_assignment_definitions = assigned_constant_definitions(normalized_file)
         apply_trace_events(
           observed_events,
           executed_line_contexts,
@@ -349,7 +349,7 @@ module Rubycli
                    elsif object_receiver?(receiver)
                      ''
                    else
-                     constant_name_from_node(receiver, namespace)
+                     receiver_constant_name_from_node(receiver, namespace)
                    end
       return if owner_name.nil?
 
@@ -504,11 +504,49 @@ module Rubycli
                    elsif object_receiver?(receiver)
                      ''
                    else
-                     constant_name_from_node(receiver, namespace)
+                     receiver_constant_name_from_node(receiver, namespace)
                    end
       return nil if owner_name.nil?
 
       [owner_name, constant_name].reject(&:empty?).join('::')
+    end
+
+    def receiver_constant_name_from_node(node, namespace)
+      return nil unless node.is_a?(Array)
+
+      case node.first
+      when :var_ref, :const_ref
+        receiver_constant_name_from_node(node[1], namespace)
+      when :@const
+        resolve_lexical_constant_name(node[1], namespace)
+      when :const_path_ref
+        parent_name = receiver_constant_name_from_node(node[1], namespace)
+        child_name = node.dig(2, 1)
+        [parent_name, child_name].compact.join('::')
+      when :top_const_ref
+        node.dig(1, 1)
+      end
+    end
+
+    def resolve_lexical_constant_name(constant_name, namespace)
+      namespace.length.downto(0) do |depth|
+        candidate = (namespace.first(depth) + [constant_name]).join('::')
+        return candidate if constant_path_defined?(candidate)
+      end
+
+      (namespace + [constant_name]).join('::')
+    end
+
+    def constant_path_defined?(name)
+      parts = name.split('::')
+      parts.reduce(Object) do |owner, part|
+        return false unless owner.is_a?(Module) && owner.const_defined?(part, false)
+
+        owner.const_get(part, false)
+      end
+      true
+    rescue StandardError
+      false
     end
 
     def lazy_context?(context)

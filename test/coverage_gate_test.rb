@@ -41,6 +41,21 @@ class CoverageGateTest < Minitest::Test
     assert_equal({}, CoverageGate.changed_lines(diff, path_prefix: 'lib/'))
   end
 
+  def test_changed_lines_decodes_git_quoted_paths
+    diff = <<~'DIFF'
+      diff --git "a/lib/\343\203\254\343\203\223\343\203\245\343\203\274.rb" "b/lib/\343\203\254\343\203\223\343\203\245\343\203\274.rb"
+      --- /dev/null
+      +++ "b/lib/\343\203\254\343\203\223\343\203\245\343\203\274.rb"
+      @@ -0,0 +1 @@
+      +puts :untested
+    DIFF
+
+    assert_equal(
+      { 'lib/レビュー.rb' => [1] },
+      CoverageGate.changed_lines(diff)
+    )
+  end
+
   def test_coverage_stats_count_only_executable_changed_lines
     changed_lines = { 'lib/example.rb' => [1, 2, 3, 4, 8] }
     line_hits = {
