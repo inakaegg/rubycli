@@ -10,6 +10,7 @@
 - Constant discovery now includes classes and modules assigned with `Class.new` / `Module.new` during the target file load.
 - Repeated loads retain assigned constant aliases when the source file is unchanged.
 - Repeated loads retain aliases from completed direct, multiple, and `const_set` assignments or matching fully qualified existence guards, including receivers found by Ruby's lexical constant fallback, without reviving failed assignments or aliases behind disabled conditions.
+- Constant discovery analyzes the preloaded source without triggering autoloads, so inactive autoload branches and self-removing target files do not add side effects or fail after a successful load.
 - Constructor arity errors raised by `--new` are now wrapped in Rubycli's user-facing runner error.
 - Framework argument errors raised by constructors are also wrapped in the same user-facing runner error.
 - Positional type conversion now waits for JSON/eval coercion, matching keyword-option behavior and preserving `--new` JSON/eval inputs.

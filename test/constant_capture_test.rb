@@ -590,6 +590,59 @@ class ConstantCaptureTest < Minitest::Test
     end
   end
 
+  def test_does_not_trigger_autoload_while_resolving_const_set_receiver
+    capture = Rubycli::ConstantCapture.new
+    previous_marker = ENV['RUBYCLI_AUTOLOAD_CAPTURED']
+    Tempfile.create(['autoload_side_effect', '.rb']) do |autoload_file|
+      autoload_file.write(<<~RUBY)
+        ENV['RUBYCLI_AUTOLOAD_CAPTURED'] = 'yes'
+        module CaptureAutoloadConstSetOwner; end
+      RUBY
+      autoload_file.flush
+
+      Tempfile.create(['autoload_const_set_alias', '.rb']) do |target_file|
+        target_file.write(<<~RUBY)
+          autoload :CaptureAutoloadConstSetOwner, #{autoload_file.path.dump}
+          if false
+            CaptureAutoloadConstSetOwner.const_set(:Runner, Module.new)
+          end
+          module CaptureAutoloadActualRunner
+            def self.run; end
+          end
+        RUBY
+        target_file.flush
+
+        capture_io { capture.capture(target_file.path) { load target_file.path } }
+
+        assert_includes capture.constants_for(target_file.path), 'CaptureAutoloadActualRunner'
+        assert_nil ENV['RUBYCLI_AUTOLOAD_CAPTURED']
+      end
+    ensure
+      ENV['RUBYCLI_AUTOLOAD_CAPTURED'] = previous_marker
+      cleanup_constant(:CaptureAutoloadConstSetOwner)
+      cleanup_constant(:CaptureAutoloadActualRunner)
+    end
+  end
+
+  def test_uses_preloaded_source_when_target_deletes_itself
+    capture = Rubycli::ConstantCapture.new
+    Tempfile.create(['self_deleting_capture', '.rb']) do |file|
+      file.write(<<~RUBY)
+        module CaptureSelfDeletingRunner
+          def self.run; end
+        end
+        File.delete(__FILE__)
+      RUBY
+      file.flush
+
+      capture_io { capture.capture(file.path) { load file.path } }
+
+      assert_includes capture.constants_for(file.path), 'CaptureSelfDeletingRunner'
+    ensure
+      cleanup_constant(:CaptureSelfDeletingRunner)
+    end
+  end
+
   def test_does_not_match_existence_guard_for_another_namespace
     capture = Rubycli::ConstantCapture.new
     Tempfile.create(['qualified_guard_alias', '.rb']) do |file|

@@ -12,6 +12,7 @@ module Rubycli
 
     def capture(file)
       normalized_file = normalize(file)
+      source = File.read(normalized_file)
       previous_names = @captured[normalized_file].dup
       previous_assignment_definitions = @assignment_definitions.fetch(normalized_file, {})
       executed_line_contexts = Hash.new { |hash, line| hash[line] = [] }
@@ -31,7 +32,7 @@ module Rubycli
     ensure
       trace&.disable
       if normalized_file && before_snapshot
-        current_assignment_definitions = assigned_constant_definitions(normalized_file)
+        current_assignment_definitions = assigned_constant_definitions(source)
         apply_trace_events(
           observed_events,
           executed_line_contexts,
@@ -209,8 +210,8 @@ module Rubycli
       end
     end
 
-    def assigned_constant_definitions(file)
-      syntax_tree = Ripper.sexp(File.read(file))
+    def assigned_constant_definitions(source)
+      syntax_tree = Ripper.sexp(source)
       return {} unless syntax_tree
 
       collect_assigned_constant_definitions(syntax_tree, [], [], {})
@@ -539,8 +540,10 @@ module Rubycli
 
     def constant_path_defined?(name)
       parts = name.split('::')
-      parts.reduce(Object) do |owner, part|
+      parts.each_with_index.reduce(Object) do |owner, (part, index)|
         return false unless owner.is_a?(Module) && owner.const_defined?(part, false)
+        return true if index == parts.length - 1
+        return false if owner.autoload?(part, false)
 
         owner.const_get(part, false)
       end

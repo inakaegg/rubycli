@@ -221,9 +221,10 @@ module Rubycli
     end
 
     def known_option_token?(token, known_option_names)
-      return false unless token&.match?(/\A-{1,2}[a-zA-Z0-9_-]+\z/)
+      match = token&.match(/\A-{1,2}([a-zA-Z0-9_-]+)(?:=.*)?\z/)
+      return false unless match
 
-      key = token.delete_prefix('--').delete_prefix('-').tr('-', '_')
+      key = match[1].tr('-', '_')
       return true if known_option_names.include?(key)
 
       known_option_names.one? { |name| name.start_with?(key) }

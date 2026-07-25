@@ -363,13 +363,17 @@ class ArgumentParserTest < Minitest::Test
   def test_eval_mode_does_not_consume_known_option_as_required_value
     method = EvalRequiredOptionSamples.method(:run)
 
-    error = assert_raises(Rubycli::ArgumentError) do
-      Rubycli.with_eval_mode(true) do
+    Rubycli.with_eval_mode(true) do
+      plain_error = assert_raises(Rubycli::ArgumentError) do
         @parser.parse(['--callback', '--verbose'], method)
       end
-    end
+      embedded_error = assert_raises(Rubycli::ArgumentError) do
+        @parser.parse(['--callback', '--verbose=1'], method)
+      end
 
-    assert_includes error.message, "Option '--callback' requires a value"
+      assert_includes plain_error.message, "Option '--callback' requires a value"
+      assert_includes embedded_error.message, "Option '--callback' requires a value"
+    end
   end
 
   def test_validate_inputs_warns_when_values_outside_choices
