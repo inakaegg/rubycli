@@ -36,7 +36,7 @@ module Rubycli
         comment_lines.each do |content|
           stripped = content.strip
           if summary_phase && stripped.empty?
-            summary_display_lines << ""
+            summary_display_lines << ''
             next
           end
 
@@ -108,15 +108,13 @@ module Rubycli
       def parse_tagged_param_line(line, method_obj)
         return nil unless line.start_with?('@param')
 
-        source_file = nil
+        nil
         source_line = nil
-        if method_obj.respond_to?(:source_location)
-          source_file, source_line = method_obj.source_location
-        end
+        _, source_line = method_obj.source_location if method_obj.respond_to?(:source_location)
         line_number = source_line ? [source_line - 1, 1].max : nil
 
         unless @environment.allow_param_comments?
-          source_file, source_line = method_obj.source_location
+          source_file, = method_obj.source_location
           @environment.handle_documentation_issue(
             '@param notation is disabled. Enable it via ENV RUBYCLI_ALLOW_PARAM_COMMENT=ON.',
             file: source_file,
@@ -134,7 +132,7 @@ module Rubycli
         type_str = match[2]
         option_tokens = combine_bracketed_tokens(match[3]&.split(/\s+/) || [])
         description = match[4]&.strip
-        description = nil if description&.empty?
+        description = nil if description && description.empty?
 
         raw_types = parse_type_annotation(type_str)
         audit_type_annotation_tokens(raw_types, method_obj)
@@ -248,13 +246,13 @@ module Rubycli
         return nil unless line.start_with?('--') || line.start_with?('-')
 
         raw_tokens = combine_bracketed_tokens(line.split(/\s+/))
-        tokens = raw_tokens.flat_map { |token|
+        tokens = raw_tokens.flat_map do |token|
           if token.include?('/') && !token.start_with?('[')
             token.split('/')
           else
             [token]
           end
-        }
+        end
 
         long_option = nil
         short_option = nil
@@ -341,9 +339,7 @@ module Rubycli
         return nil unless placeholder_token?(clean_placeholder)
 
         type_token = nil
-        if tokens.first && type_token_candidate?(tokens.first)
-          type_token = tokens.shift
-        end
+        type_token = tokens.shift if tokens.first && type_token_candidate?(tokens.first)
 
         description = tokens.join(' ').strip
         description = nil if description.empty?
@@ -392,14 +388,14 @@ module Rubycli
           return ReturnDefinition.new(types: types, description: description)
         end
 
-        if line.start_with?('return ')
-          stripped = line.sub(/\Areturn\s+/, '')
-          type_token, description = stripped.split(/\s+/, 2)
-          types = parse_type_annotation(type_token)
-          audit_type_annotation_tokens(types, method_obj)
-          description = description&.strip
-          return ReturnDefinition.new(types: types, description: description)
-        end
+        return unless line.start_with?('return ')
+
+        stripped = line.sub(/\Areturn\s+/, '')
+        type_token, description = stripped.split(/\s+/, 2)
+        types = parse_type_annotation(type_token)
+        audit_type_annotation_tokens(types, method_obj)
+        description = description&.strip
+        ReturnDefinition.new(types: types, description: description)
       end
 
       def doc_issue_location(method_obj)
@@ -437,11 +433,10 @@ module Rubycli
         end
 
         literal_entry = literal_entry_from_token(normalized)
-        if literal_entry
-          return
-        end
+        return if literal_entry
 
-        if literal_context && literal_token_candidate?(normalized, include_uppercase: true) && !known_type_token?(normalized)
+        if literal_context && literal_token_candidate?(normalized,
+                                                       include_uppercase: true) && !known_type_token?(normalized)
           warn_unknown_allowed_value(normalized, source_file, line_number)
           return
         end
@@ -478,6 +473,7 @@ module Rubycli
           line = lines[index]
           signature << line
           break if balanced_signature?(signature)
+
           index += 1
         end
 
@@ -520,12 +516,13 @@ module Rubycli
 
       def extract_params_from_signature(signature)
         return nil unless (def_match = signature.match(/\bdef\b\s+[^(\s]+\s*(\((.*)\))?/m))
+
         if def_match[1]
-          inner = def_match[1][1..-2]
-          inner
+          def_match[1][1..-2]
+
         else
           signature_after_def = signature.sub(/.*\bdef\b\s+[^(\s]+\s*/m, '')
-          signature_after_def.split(/\n/).first&.strip
+          signature_after_def.split("\n").first&.strip
         end
       end
 
@@ -564,9 +561,7 @@ module Rubycli
 
         source_file = nil
         source_line = nil
-        if method_obj.respond_to?(:source_location)
-          source_file, source_line = method_obj.source_location
-        end
+        source_file, source_line = method_obj.source_location if method_obj.respond_to?(:source_location)
         line_for_comment = source_line ? [source_line - 1, 1].max : nil
 
         method_obj.parameters.each do |type, name|
@@ -641,21 +636,21 @@ module Rubycli
         metadata[:positionals_map] = positional_map
 
         metadata[:options].each do |opt|
-          if defaults.key?(opt.keyword)
-            opt.default_value = defaults[opt.keyword]
-            if TypeUtils.boolean_string?(opt.default_value)
-              opt.boolean_flag = true
-              opt.requires_value = false
-              if opt.doc_format == :auto_generated
-                opt.value_name = nil
-                opt.types = ['Boolean']
-              end
-            elsif opt.boolean_flag
-              opt.boolean_flag = false
-              opt.requires_value = true
-              opt.value_name ||= default_placeholder_for(opt.keyword)
-              opt.types = ['String'] if opt.types.nil? || opt.types.empty?
+          next unless defaults.key?(opt.keyword)
+
+          opt.default_value = defaults[opt.keyword]
+          if TypeUtils.boolean_string?(opt.default_value)
+            opt.boolean_flag = true
+            opt.requires_value = false
+            if opt.doc_format == :auto_generated
+              opt.value_name = nil
+              opt.types = ['Boolean']
             end
+          elsif opt.boolean_flag
+            opt.boolean_flag = false
+            opt.requires_value = true
+            opt.value_name ||= default_placeholder_for(opt.keyword)
+            opt.types = ['String'] if opt.types.nil? || opt.types.empty?
           end
         end
       end
@@ -681,9 +676,7 @@ module Rubycli
         parts << placeholder unless placeholder.empty?
 
         type_text = doc.inline_type_text
-        if (!type_text || type_text.empty?) && doc.types && !doc.types.empty?
-          type_text = "[#{doc.types.join(', ')}]"
-        end
+        type_text = "[#{doc.types.join(', ')}]" if (!type_text || type_text.empty?) && doc.types && !doc.types.empty?
         parts << type_text if type_text && !type_text.empty?
 
         description = doc.description.to_s.strip
@@ -774,10 +767,9 @@ module Rubycli
 
         stripped = token.strip
         return nil if stripped.empty?
+
         stripped = stripped[1..] if stripped.start_with?('[') && !stripped.end_with?(']')
-        if stripped.end_with?(']') && !stripped.include?('[')
-          stripped = stripped[0...-1]
-        end
+        stripped = stripped[0...-1] if stripped.end_with?(']') && !stripped.include?('[')
 
         lowered = stripped.downcase
         return { kind: :literal, value: nil } if %w[nil null ~].include?(lowered)
@@ -799,17 +791,11 @@ module Rubycli
           return { kind: :literal, value: stripped[1..-2] }
         end
 
-        if stripped.match?(/\A-?\d+\z/)
-          return { kind: :literal, value: Integer(stripped) }
-        end
+        return { kind: :literal, value: Integer(stripped) } if stripped.match?(/\A-?\d+\z/)
 
-        if stripped.match?(/\A-?\d+\.\d+\z/)
-          return { kind: :literal, value: Float(stripped) }
-        end
+        return { kind: :literal, value: Float(stripped) } if stripped.match?(/\A-?\d+\.\d+\z/)
 
-        if stripped.match?(/\A[a-z0-9._-]+\z/)
-          return { kind: :literal, value: stripped }
-        end
+        return { kind: :literal, value: stripped } if stripped.match?(/\A[a-z0-9._-]+\z/)
 
         nil
       rescue ArgumentError
@@ -909,7 +895,6 @@ module Rubycli
         @type_dictionary = nil
       end
 
-
       def placeholder_token?(token)
         return false unless token
 
@@ -920,7 +905,7 @@ module Rubycli
         candidate = candidate[1..-2].strip if optional
         return false if candidate.empty?
 
-        candidate = candidate.gsub(/[,\|]/, '')
+        candidate = candidate.gsub(/[,|]/, '')
         return false if candidate.empty?
 
         ellipsis = candidate.end_with?('...')
@@ -1002,8 +987,6 @@ module Rubycli
           stripped[0..-3]
         elsif stripped.start_with?('Array<') && stripped.end_with?('>')
           stripped[6..-2].strip
-        else
-          nil
         end
       end
 
@@ -1117,16 +1100,14 @@ module Rubycli
         normalized_long = normalize_long_option(long_option)
         normalized_short = normalize_short_option(short_option)
         value_placeholder = value_name&.strip
-        value_placeholder = nil if value_placeholder&.empty?
+        value_placeholder = nil if value_placeholder && value_placeholder.empty?
         description_text = description&.strip
-        description_text = nil if description_text&.empty?
+        description_text = nil if description_text && description_text.empty?
 
         placeholder_info = analyze_placeholder(value_placeholder)
         normalized_types = normalize_type_list(types)
         inferred_types = infer_types_from_placeholder(normalized_types, placeholder_info)
-        if inferred_types.empty? && value_placeholder.nil?
-          inferred_types = ['Boolean']
-        end
+        inferred_types = ['Boolean'] if inferred_types.empty? && value_placeholder.nil?
 
         optional_value = placeholder_info[:optional]
         boolean_flag = !optional_value && inferred_types.any? { |type| boolean_type?(type) }

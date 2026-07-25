@@ -192,13 +192,13 @@ module Rubycli
           events = assignment_events[current[:line]]
           assignment_observed = events.include?(:const_added) || events.count(:warn) >= 2
           persistence_observed = current[:persistence_line] &&
-            !current[:persistence_ambiguous] &&
-            executed_line_contexts[current[:persistence_line]].any? do |active_context_events|
-              context_requirements_met?(
-                active_context_events,
-                current[:required_context_events]
-              )
-            end
+                                 !current[:persistence_ambiguous] &&
+                                 executed_line_contexts[current[:persistence_line]].any? do |active_context_events|
+                                   context_requirements_met?(
+                                     active_context_events,
+                                     current[:required_context_events]
+                                   )
+                                 end
           assignment_observed || persistence_observed
         end
       end
@@ -494,9 +494,7 @@ module Rubycli
     end
 
     def guarded_constant_name(condition, namespace)
-      if condition&.first == :defined
-        return constant_name_from_node(condition[1], namespace)
-      end
+      return constant_name_from_node(condition[1], namespace) if condition&.first == :defined
 
       receiver, method_name, arguments = call_parts(condition)
       return nil unless method_name == 'const_defined?'
@@ -605,6 +603,5 @@ module Rubycli
         node.dig(1, 1)
       end
     end
-
   end
 end

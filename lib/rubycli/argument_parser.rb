@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'did_you_mean'
 require 'ripper'
 
@@ -166,9 +168,7 @@ module Rubycli
                         'true'
                       end
 
-      if requires_value && value_capture.nil?
-        raise ArgumentError, "Option '#{option_label}' requires a value"
-      end
+      raise ArgumentError, "Option '#{option_label}' requires a value" if requires_value && value_capture.nil?
 
       converted_value = convert_option_value(
         final_key_sym,
@@ -183,10 +183,8 @@ module Rubycli
     def capture_required_option_value(option_label, stream, known_option_names)
       next_token = stream.current
       option_like_value = looks_like_option?(next_token) &&
-        !valid_eval_option_value?(next_token, known_option_names)
-      if next_token.nil? || option_like_value
-        raise ArgumentError, "Option '#{option_label}' requires a value"
-      end
+                          !valid_eval_option_value?(next_token, known_option_names)
+      raise ArgumentError, "Option '#{option_label}' requires a value" if next_token.nil? || option_like_value
 
       stream.consume
     end
@@ -196,20 +194,22 @@ module Rubycli
         if (next_token = stream.current) && TypeUtils.boolean_string?(next_token)
           return stream.consume
         end
-        return 'true'
+
+        'true'
       elsif option_meta[:optional_value]
         if (next_token = stream.current) && !looks_like_option?(next_token)
           return stream.consume
         end
-        return true
+
+        true
       elsif requires_value == false
-        return 'true'
+        'true'
       elsif requires_value
-        return capture_required_option_value(option_meta.long, stream, known_option_names)
+        capture_required_option_value(option_meta.long, stream, known_option_names)
       elsif (next_token = stream.current) && !looks_like_option?(next_token)
-        return stream.consume
+        stream.consume
       else
-        return 'true'
+        'true'
       end
     end
 
@@ -355,17 +355,25 @@ module Rubycli
         if normalized.start_with?('Array<') && normalized.end_with?('>')
           inner = normalized[6..-2].strip
           element_converter = converter_for_single_type(inner)
-          return ->(value) {
+          return lambda { |value|
             list_items(value).map do |item|
-              inner == 'String' && item.is_a?(String) ? item : (element_converter ? element_converter.call(item) : item)
+              if inner == 'String' && item.is_a?(String)
+                item
+              else
+                (element_converter ? element_converter.call(item) : item)
+              end
             end
           }
         elsif normalized.end_with?('[]')
           inner = normalized[0..-3]
           element_converter = converter_for_single_type(inner)
-          return ->(value) {
+          return lambda { |value|
             list_items(value).map do |item|
-              inner == 'String' && item.is_a?(String) ? item : (element_converter ? element_converter.call(item) : item)
+              if inner == 'String' && item.is_a?(String)
+                item
+              else
+                (element_converter ? element_converter.call(item) : item)
+              end
             end
           }
         elsif normalized.casecmp('Array').zero?
@@ -406,6 +414,7 @@ module Rubycli
       positional_argument_bindings(method_obj, positional_args.size).each do |type, name, indexes|
         definition = positional_map[name]
         next unless definition
+
         label = definition.label || definition.placeholder || name.to_s.upcase
 
         case type
@@ -455,10 +464,10 @@ module Rubycli
       formatted_value = format_literal_value(entry)
 
       message = if description
-        "#{label} must be #{description} (received #{formatted_value})"
-      else
-        "Value #{formatted_value} for #{label} is not allowed"
-      end
+                  "#{label} must be #{description} (received #{formatted_value})"
+                else
+                  "Value #{formatted_value} for #{label} is not allowed"
+                end
 
       suggestions = literal_suggestions(definition, entry)
       return message if suggestions.empty?
@@ -501,7 +510,9 @@ module Rubycli
     end
 
     def allowed_value_description(definition)
-      literal_descriptions = Array(definition.allowed_values).map { |entry| format_literal_value(entry[:value]) }.reject(&:empty?)
+      literal_descriptions = Array(definition.allowed_values).map do |entry|
+        format_literal_value(entry[:value])
+      end.reject(&:empty?)
       type_descriptions = Array(definition.types)
                           .map { |token| token.to_s.strip }
                           .reject { |token| token.empty? || literal_hint_token?(token) }
@@ -543,6 +554,7 @@ module Rubycli
 
       if (inner = array_inner_type(normalized))
         return false unless value.is_a?(Array)
+
         return value.all? { |element| matches_type_token?(inner, element) }
       end
 
@@ -566,8 +578,6 @@ module Rubycli
         token[0..-3]
       elsif token.start_with?('Array<') && token.end_with?('>')
         token[6..-2].strip
-      else
-        nil
       end
     end
 
@@ -636,7 +646,6 @@ module Rubycli
       token.start_with?('%i[', '%I[', '%w[', '%W[')
     end
 
-
     def build_cli_alias_map(option_defs)
       option_defs.each_with_object({}) do |opt, memo|
         next unless opt.short
@@ -672,21 +681,17 @@ module Rubycli
       lambda do |value|
         return nil if value.nil? && allow_nil
 
-        if allow_nil && value.is_a?(String) && value.strip.casecmp('nil').zero?
-          next nil
-        end
+        next nil if allow_nil && value.is_a?(String) && value.strip.casecmp('nil').zero?
 
         if converters.empty?
           value
         else
           last_error = nil
           converters.each do |converter|
-            begin
-              result = converter.call(value)
-              return result
-            rescue StandardError => e
-              last_error = e
-            end
+            result = converter.call(value)
+            return result
+          rescue StandardError => e
+            last_error = e
           end
           raise last_error || ArgumentError.new("Could not convert value '#{value}'")
         end
@@ -710,13 +715,13 @@ module Rubycli
       when 'Boolean', 'TrueClass', 'FalseClass'
         ->(value) { TypeUtils.convert_boolean(value) }
       when 'Symbol'
-        ->(value) {
+        lambda { |value|
           converted_value = convert_arg(value)
           converted_value.is_a?(Symbol) ? converted_value : value.to_sym
         }
       when 'BigDecimal', 'Decimal'
         require 'bigdecimal'
-        ->(value) {
+        lambda { |value|
           return value if value.is_a?(BigDecimal)
 
           if value.is_a?(String)
@@ -735,11 +740,9 @@ module Rubycli
         require 'date'
         ->(value) { DateTime.parse(value) }
       when 'JSON'
-        ->(value) {
+        lambda { |value|
           parsed_value = convert_arg(value)
-          unless parsed_value.is_a?(Hash) || parsed_value.is_a?(Array)
-            parsed_value = JSON.parse(value)
-          end
+          parsed_value = JSON.parse(value) unless parsed_value.is_a?(Hash) || parsed_value.is_a?(Array)
           unless parsed_value.is_a?(Hash) || parsed_value.is_a?(Array)
             raise ::ArgumentError, 'JSON value must be an object or array'
           end
@@ -747,7 +750,7 @@ module Rubycli
           parsed_value
         }
       when 'Hash'
-        ->(value) {
+        lambda { |value|
           parsed_value = convert_arg(value)
           parsed_value = JSON.parse(value) unless parsed_value.is_a?(Hash)
           raise ::ArgumentError, 'Hash value must be an object' unless parsed_value.is_a?(Hash)
@@ -756,7 +759,7 @@ module Rubycli
         }
       when 'Pathname'
         require 'pathname'
-        ->(value) {
+        lambda { |value|
           return value if value.is_a?(Pathname)
 
           Pathname.new(value.to_s)
@@ -765,23 +768,29 @@ module Rubycli
         if normalized.start_with?('Array<') && normalized.end_with?('>')
           inner = normalized[6..-2].strip
           element_converter = converter_for_single_type(inner)
-          ->(value) {
+          lambda { |value|
             list_items(value).map do |item|
-              inner == 'String' && item.is_a?(String) ? item : (element_converter ? element_converter.call(item) : item)
+              if inner == 'String' && item.is_a?(String)
+                item
+              else
+                (element_converter ? element_converter.call(item) : item)
+              end
             end
           }
         elsif normalized.end_with?('[]')
           inner = normalized[0..-3]
           element_converter = converter_for_single_type(inner)
-          ->(value) {
+          lambda { |value|
             list_items(value).map do |item|
-              inner == 'String' && item.is_a?(String) ? item : (element_converter ? element_converter.call(item) : item)
+              if inner == 'String' && item.is_a?(String)
+                item
+              else
+                (element_converter ? element_converter.call(item) : item)
+              end
             end
           }
         elsif normalized == 'Array'
           ->(value) { list_items(value) }
-        else
-          nil
         end
       end
     end
@@ -793,9 +802,7 @@ module Rubycli
     end
 
     def convert_option_value(keyword, value, option_meta, type_converters)
-      if Rubycli.eval_mode? || Rubycli.json_mode?
-        return convert_arg(value)
-      end
+      return convert_arg(value) if Rubycli.eval_mode? || Rubycli.json_mode?
 
       converter = type_converters[keyword]
       converted_value = convert_arg(value)
@@ -809,7 +816,7 @@ module Rubycli
 
     def looks_like_option?(token)
       return false unless token
-      return false if token == '--' || token == '-'
+      return false if ['--', '-'].include?(token)
 
       decimal_digits = '\d(?:_?\d)*'
       negative_decimal = token.match?(

@@ -29,13 +29,9 @@ module Rubycli
     def apply_argument_coercions(positional_args, keyword_args)
       ensure_modes_compatible!
 
-      if json_mode?
-        coerce_values!(positional_args, keyword_args) { |value| @json_coercer.coerce_json_value(value) }
-      end
+      coerce_values!(positional_args, keyword_args) { |value| @json_coercer.coerce_json_value(value) } if json_mode?
 
-      if eval_mode?
-        coerce_values!(positional_args, keyword_args) { |value| @eval_coercer.coerce_eval_value(value) }
-      end
+      coerce_values!(positional_args, keyword_args) { |value| @eval_coercer.coerce_eval_value(value) } if eval_mode?
     rescue ::ArgumentError => e
       raise Rubycli::ArgumentError, e.message
     end
@@ -54,13 +50,13 @@ module Rubycli
     end
 
     def ensure_modes_compatible!
-      if json_mode? && eval_mode?
-        raise Rubycli::ArgumentError, '--json-args cannot be combined with --eval-args or --eval-lax'
-      end
+      return unless json_mode? && eval_mode?
+
+      raise Rubycli::ArgumentError, '--json-args cannot be combined with --eval-args or --eval-lax'
     end
 
-    def coerce_values!(positional_args, keyword_args)
-      positional_args.map! { |value| yield(value) }
+    def coerce_values!(positional_args, keyword_args, &block)
+      positional_args.map!(&block)
       keyword_args.keys.each do |key|
         keyword_args[key] = yield(keyword_args[key])
       end

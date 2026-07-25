@@ -1,4 +1,6 @@
-require_relative "type_utils"
+# frozen_string_literal: true
+
+require_relative 'type_utils'
 
 module Rubycli
   class HelpRenderer
@@ -8,22 +10,22 @@ module Rubycli
       @documentation_registry = documentation_registry
     end
 
-    def print_help(target, catalog)
+    def print_help(_target, catalog)
       puts "Usage: #{File.basename($PROGRAM_NAME)} COMMAND [arguments]"
       puts
 
       instance_entries = catalog.entries_for(:instance)
       class_entries = catalog.entries_for(:class)
       groups = []
-      groups << { label: "Instance methods", entries: instance_entries } unless instance_entries.empty?
-      groups << { label: "Class methods", entries: class_entries } unless class_entries.empty?
+      groups << { label: 'Instance methods', entries: instance_entries } unless instance_entries.empty?
+      groups << { label: 'Class methods', entries: class_entries } unless class_entries.empty?
 
       if groups.empty?
-        puts "No commands available."
+        puts 'No commands available.'
         return
       end
 
-      puts "Available commands:"
+      puts 'Available commands:'
       groups.each do |group|
         puts "  #{group[:label]}:"
         group[:entries].each do |entry|
@@ -32,16 +34,12 @@ module Rubycli
           line += " #{description}" unless description.empty?
           puts line.rstrip
 
-          unless entry.aliases.empty?
-            puts "      Aliases: #{entry.aliases.join(", ")}"
-          end
+          puts "      Aliases: #{entry.aliases.join(', ')}" unless entry.aliases.empty?
         end
         puts unless group.equal?(groups.last)
       end
 
-      if catalog.duplicates.any?
-        puts "Methods with the same name can be invoked via instance::NAME / class::NAME."
-      end
+      puts 'Methods with the same name can be invoked via instance::NAME / class::NAME.' if catalog.duplicates.any?
 
       puts
       puts "Detailed command help: #{File.basename($PROGRAM_NAME)} COMMAND help"
@@ -53,7 +51,7 @@ module Rubycli
       return summary if summary && !summary.empty?
 
       params_str = format_method_parameters(method_obj.parameters, metadata)
-      params_str.empty? ? "(no arguments)" : params_str
+      params_str.empty? ? '(no arguments)' : params_str
     end
 
     def usage_for_method(command, method)
@@ -69,17 +67,17 @@ module Rubycli
 
       returns = metadata[:returns] || []
       if returns.any?
-        usage_lines << "" unless usage_lines.last == ""
-        usage_lines << "Return values:"
+        usage_lines << '' unless usage_lines.last == ''
+        usage_lines << 'Return values:'
         returns.each do |ret|
-          type_label = (ret.types || []).join(" | ")
+          type_label = (ret.types || []).join(' | ')
           line = "  #{type_label}"
           line += "  #{ret.description}" if ret.description && !ret.description.empty?
           usage_lines << line
         end
       end
 
-      usage_lines.pop while usage_lines.last == ""
+      usage_lines.pop while usage_lines.last == ''
       usage_block = usage_lines.join("\n")
 
       sections = []
@@ -100,7 +98,7 @@ module Rubycli
       option_map = (metadata[:options] || []).each_with_object({}) { |opt, h| h[opt[:keyword]] = opt }
       positional_map = metadata[:positionals_map] || {}
 
-      parameters.map { |type, name|
+      parameters.map do |type, name|
         case type
         when :req
           positional_usage_token(type, name, positional_map[name])
@@ -122,19 +120,19 @@ module Rubycli
         when :key
           opt = option_map[name]
           label = if opt
-            if opt.doc_format == :auto_generated
-              auto_generated_option_usage_label(name, opt)
-            else
-              option_flag_with_placeholder(opt)
-            end
-          else
-            "--#{name.to_s.tr('_', '-')}=<value>"
-          end
+                    if opt.doc_format == :auto_generated
+                      auto_generated_option_usage_label(name, opt)
+                    else
+                      option_flag_with_placeholder(opt)
+                    end
+                  else
+                    "--#{name.to_s.tr('_', '-')}=<value>"
+                  end
           "[#{label}]"
-        when :keyrest then "[--<option>...]"
-        else ""
+        when :keyrest then '[--<option>...]'
+        else ''
         end
-      }.compact.reject(&:empty?).join(" ")
+      end.compact.reject(&:empty?).join(' ')
     end
 
     def auto_generated_option_usage_label(name, opt)
@@ -145,13 +143,13 @@ module Rubycli
       formatted = if value_name && !value_name.to_s.strip.empty?
                     ensure_angle_bracket_placeholder(value_name)
                   else
-                    "<value>"
+                    '<value>'
                   end
       "#{base_flag}=#{formatted}"
     end
 
     def render_positionals(positionals_in_order)
-        rows = positionals_in_order.map do |info|
+      rows = positionals_in_order.map do |info|
         definition = info[:definition]
         label = info[:label]
         type = type_display(definition)
@@ -162,7 +160,7 @@ module Rubycli
         description_parts << default_text if default_text
         [label, type, requirement, description_parts.join(' ')]
       end
-      table_block("Positional arguments:", rows)
+      table_block('Positional arguments:', rows)
     end
 
     def render_options(options, required_keywords)
@@ -176,7 +174,7 @@ module Rubycli
         description_parts << default_text if default_text
         [label, type, requirement, description_parts.join(' ').strip]
       end
-      table_block("Options:", rows)
+      table_block('Options:', rows)
     end
 
     def table_block(header, rows)
@@ -185,7 +183,7 @@ module Rubycli
       cols = rows.transpose
       widths = cols.map { |col| col.map { |value| value.to_s.length }.max || 0 }
 
-      lines = ["", header]
+      lines = ['', header]
       rows.each do |row|
         padded = row.each_with_index.map do |value, idx|
           text = value.to_s
@@ -252,22 +250,23 @@ module Rubycli
 
     def positional_default(definition)
       return nil unless definition
+
       value = definition.default_value
       return nil if value.nil? || value.to_s.empty?
 
       "(default: #{value})"
     end
 
- def option_default(opt)
-   value = opt.default_value
-   return nil if value.nil? || value.to_s.empty?
+    def option_default(opt)
+      value = opt.default_value
+      return nil if value.nil? || value.to_s.empty?
 
-   "(default: #{value})"
- end
+      "(default: #{value})"
+    end
 
- def required_keyword_names(method)
-   method.parameters.select { |type, _| type == :keyreq }.map { |_, name| name }
- end
+    def required_keyword_names(method)
+      method.parameters.select { |type, _| type == :keyreq }.map { |_, name| name }
+    end
 
     def ordered_positionals(method, metadata)
       positional_map = metadata[:positionals_map] || {}
@@ -296,8 +295,6 @@ module Rubycli
         optional_placeholder(placeholder, definition, name)
       when :rest
         rest_placeholder(placeholder, definition, name)
-      else
-        nil
       end
     end
 
@@ -350,8 +347,8 @@ module Rubycli
 
     def option_flag_with_placeholder(opt)
       flags = [opt.short, opt.long].compact
-      flags = ["--#{opt.keyword.to_s.tr("_", "-")}"] if flags.empty?
-      flag_label = flags.join(", ")
+      flags = ["--#{opt.keyword.to_s.tr('_', '-')}"] if flags.empty?
+      flag_label = flags.join(', ')
       placeholder = option_value_placeholder(opt)
       if placeholder
         formatted = ensure_angle_bracket_placeholder(placeholder)
@@ -370,8 +367,7 @@ module Rubycli
       return nil if opt.boolean_flag
       return opt.value_name if opt.value_name && !opt.value_name.empty?
 
-      first_non_nil_type = opt.types&.find { |type| !nil_type?(type) && !boolean_type?(type) }
-      first_non_nil_type
+      opt.types&.find { |type| !nil_type?(type) && !boolean_type?(type) }
     end
 
     def auto_generated_placeholder?(placeholder, definition, name)

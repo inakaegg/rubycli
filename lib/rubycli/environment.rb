@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Rubycli
   # Environment captures runtime flags and configuration derived from ENV / argv.
   class Environment
@@ -74,10 +76,10 @@ module Rubycli
       end
 
       formatted_message = if location
-        "#{location} #{message}"
-      else
-        message
-      end
+                            "#{location} #{message}"
+                          else
+                            message
+                          end
 
       entry = { message: formatted_message, location: location }
       @documentation_issues << entry
@@ -85,11 +87,9 @@ module Rubycli
     end
 
     def handle_input_violation(message)
-      if strict_input?
-        raise Rubycli::ArgumentError, message
-      else
-        warn "[WARN] #{message} (use --strict to abort on invalid input)"
-      end
+      raise Rubycli::ArgumentError, message if strict_input?
+
+      warn "[WARN] #{message} (use --strict to abort on invalid input)"
     end
 
     def enable_print_result!

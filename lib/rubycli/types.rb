@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Rubycli
   OptionDefinition = Struct.new(
     :keyword, :long, :short, :value_name, :types, :description, :requires_value,

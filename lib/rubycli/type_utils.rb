@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Rubycli
   module TypeUtils
     module_function
@@ -41,7 +43,7 @@ module Rubycli
       optional = trimmed.start_with?('[') && trimmed.end_with?(']')
       core = optional ? trimmed[1..-2].strip : trimmed.dup
       sanitized = core.gsub(/\[|\]/, '')
-      sanitized = sanitized.gsub(/\.\.\./, '')
+      sanitized = sanitized.gsub('...', '')
       list = sanitized.include?(',') || core.include?('...') || core.include?('[,')
       token = sanitized.split(',').first.to_s.strip
       token = token.gsub(/[^A-Za-z0-9_]/, '')
@@ -58,7 +60,7 @@ module Rubycli
           inferred = if placeholder_info[:list]
                        include_optional_boolean ? ['Boolean', 'String[]'] : ['String[]']
                      else
-                       include_optional_boolean ? ['Boolean', 'String'] : ['String']
+                       include_optional_boolean ? %w[Boolean String] : ['String']
                      end
           working.concat(inferred)
         elsif placeholder_info[:list]
@@ -87,9 +89,7 @@ module Rubycli
           end
         end
 
-        unless array_type_present
-          working << 'String[]'
-        end
+        working << 'String[]' unless array_type_present
       end
 
       working.compact.uniq
@@ -113,11 +113,13 @@ module Rubycli
 
     def normalize_long_option(option)
       return nil unless option
+
       option.start_with?('--') ? option : "--#{option.delete_prefix('-')}"
     end
 
     def normalize_short_option(option)
       return nil unless option
+
       option.start_with?('-') ? option : "-#{option}"
     end
 

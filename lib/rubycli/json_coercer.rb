@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Rubycli
   class JsonCoercer
     THREAD_KEY = :rubycli_json_mode

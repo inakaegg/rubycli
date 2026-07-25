@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Rubycli
   class EvalCoercer
     THREAD_KEY = :rubycli_eval_mode
@@ -59,12 +61,10 @@ module Rubycli
 
       (Thread.current[BINDING_THREAD_KEY] || isolated_binding).eval(trimmed)
     rescue SyntaxError, NameError => e
-      if eval_lax_mode?
-        warn "[WARN] Failed to evaluate argument as Ruby (#{e.message.strip}). Passing it through because --eval-lax is enabled."
-        expression
-      else
-        raise
-      end
+      raise unless eval_lax_mode?
+
+      warn "[WARN] Failed to evaluate argument as Ruby (#{e.message.strip}). Passing it through because --eval-lax is enabled."
+      expression
     end
 
     def isolated_binding

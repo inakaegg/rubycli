@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Rubycli
   class ResultEmitter
     def initialize(environment:)

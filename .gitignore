@@ -2,3 +2,5 @@ tmp/
 .ruby-lsp/
 *.gem
 .DS_Store
+Gemfile.lock
+.rubocop_cache/
