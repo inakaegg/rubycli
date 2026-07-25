@@ -743,13 +743,17 @@ module Rubycli
           inner = normalized[6..-2].strip
           element_converter = converter_for_single_type(inner)
           ->(value) {
-            list_items(value).map { |item| element_converter ? element_converter.call(item) : item }
+            list_items(value).map do |item|
+              inner == 'String' && item.is_a?(String) ? item : (element_converter ? element_converter.call(item) : item)
+            end
           }
         elsif normalized.end_with?('[]')
           inner = normalized[0..-3]
           element_converter = converter_for_single_type(inner)
           ->(value) {
-            list_items(value).map { |item| element_converter ? element_converter.call(item) : item }
+            list_items(value).map do |item|
+              inner == 'String' && item.is_a?(String) ? item : (element_converter ? element_converter.call(item) : item)
+            end
           }
         elsif normalized == 'Array'
           ->(value) { list_items(value) }
@@ -782,7 +786,7 @@ module Rubycli
 
     def looks_like_option?(token)
       return false unless token
-      return false if token == '--'
+      return false if token == '--' || token == '-'
 
       token.start_with?('-') && !token.match?(
         /\A-(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?\z/

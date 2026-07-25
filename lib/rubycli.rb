@@ -221,24 +221,33 @@ module Rubycli
         raise Error, '--json-args cannot be combined with --eval-args or --eval-lax'
       end
 
-      runner_target, full_path = prepare_runner_target(
-        target_path,
-        class_name,
-        new: new,
-        new_args: new_args,
-        json_mode: json,
-        eval_mode: eval_args,
-        eval_lax: eval_lax,
-        pre_scripts: pre_scripts,
-        constant_mode: constant_mode
-      )
-
-      original_program_name = $PROGRAM_NAME
+      original_program_name = nil
       original_argv = nil
-      $PROGRAM_NAME = File.basename(full_path)
-      original_argv = ARGV.dup
-      ARGV.replace(Array(cli_args).dup)
-      run_with_modes(runner_target, json: json, eval_args: eval_args, eval_lax: eval_lax)
+      execution = proc do
+        runner_target, full_path = prepare_runner_target(
+          target_path,
+          class_name,
+          new: new,
+          new_args: new_args,
+          json_mode: json,
+          eval_mode: eval_args,
+          eval_lax: eval_lax,
+          pre_scripts: pre_scripts,
+          constant_mode: constant_mode
+        )
+
+        original_program_name = $PROGRAM_NAME
+        $PROGRAM_NAME = File.basename(full_path)
+        original_argv = ARGV.dup
+        ARGV.replace(Array(cli_args).dup)
+        run_with_modes(runner_target, json: json, eval_args: eval_args, eval_lax: eval_lax)
+      end
+
+      if eval_args
+        Rubycli.eval_coercer.with_eval_binding(&execution)
+      else
+        execution.call
+      end
     ensure
       $PROGRAM_NAME = original_program_name if original_program_name
       ARGV.replace(original_argv) if original_argv
@@ -372,7 +381,7 @@ module Rubycli
       else
         target
       end
-    rescue ::ArgumentError => e
+    rescue ::ArgumentError, Rubycli::ArgumentError => e
       raise Error, "Failed to instantiate target: #{e.message}"
     end
 
@@ -382,7 +391,7 @@ module Rubycli
       if json
         Rubycli.with_json_mode(true, &runner)
       elsif eval_args
-        Rubycli.with_eval_mode(true, lax: eval_lax, &runner)
+        Rubycli.with_eval_mode(true, lax: eval_lax, reuse_binding: true, &runner)
       else
         runner.call
       end
@@ -399,7 +408,7 @@ module Rubycli
       keyword_args = {}
 
       Rubycli.argument_mode_controller.with_json_mode(json_mode) do
-        Rubycli.argument_mode_controller.with_eval_mode(eval_mode, lax: eval_lax) do
+        Rubycli.argument_mode_controller.with_eval_mode(eval_mode, lax: eval_lax, reuse_binding: true) do
           positional_args, keyword_args = Rubycli.argument_parser.parse(tokens.dup, initializer_method)
           Rubycli.apply_argument_coercions(positional_args, keyword_args)
           Rubycli.argument_parser.validate_inputs(initializer_method, positional_args, keyword_args)
@@ -480,13 +489,12 @@ module Rubycli
         return methods
       end
 
-      normalized = normalize_path(full_path)
-      class_methods = collect_defined_methods(target.singleton_class, normalized)
+      class_methods = target.singleton_class.public_instance_methods(false)
                       .map { |name| target.method(name) }
                       .select { |method_obj| Rubycli.cli.send(:exposable_method?, method_obj) }
       return class_methods unless instantiate
 
-      instance_methods = collect_defined_methods(target, normalized)
+      instance_methods = target.public_instance_methods(false)
                          .map { |name| target.instance_method(name) }
                          .select { |method_obj| Rubycli.cli.send(:exposable_method?, method_obj) }
       target.is_a?(Class) ? instance_methods + class_methods : instance_methods

@@ -282,7 +282,9 @@ syntax (`--tags '["build","test"]'`) and comma-delimited strings
 (`--tags "build,test"`) are accepted. Space-separated multi-value flags
 (`--tags build test`) are not supported, and options without a repeated/array
 hint stay scalars. `--strict` verifies each element against the documented
-type, so `--tags [1,2]` fails when the docs say `[String[]]`.
+type, so `--tags [1,2]` fails when the docs say `[String[]]`. Quoted elements
+remain strings even when their contents look like other literals, such as
+`--tags '["true","null"]'`.
 
 ### Literal choices and enums
 
@@ -440,9 +442,11 @@ rubycli -E scripts/report_runner.rb publish \
 ```
 
 Evaluation happens inside an isolated binding
-(`Object.new.instance_eval { binding }`). Treat this as unsafe input: do not
-enable it for untrusted callers. Programmatic equivalent:
-`Rubycli.with_eval_mode(true) { ... }`.
+(`Object.new.instance_eval { binding }`). All eval arguments in one Runner
+execution, including `--new=VALUE` constructor arguments and the selected
+command's arguments, share that binding; it is discarded after the execution.
+Treat this as unsafe input: do not enable it for untrusted callers.
+Programmatic equivalent: `Rubycli.with_eval_mode(true) { ... }`.
 
 `--eval-lax` / `-E` behaves like `--eval-args`, but tokens that fail to parse
 as Ruby (for example a bare `https://example.com`) produce a warning and are

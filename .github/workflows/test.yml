@@ -52,4 +52,4 @@ jobs:
       - name: Enforce coverage thresholds
         run: ruby -Ilib:test test/coverage_runner.rb
         env:
-          COVERAGE_BASE_REF: origin/${{ github.base_ref || github.event.repository.default_branch }}
+          COVERAGE_BASE_REF: ${{ github.event_name == 'push' && github.event.created == false && github.event.deleted == false && github.event.before || format('origin/{0}', github.base_ref || github.event.repository.default_branch) }}

@@ -139,6 +139,20 @@ class RunnerTest < Minitest::Test
     assert_includes error.message, 'wrong number of arguments'
   end
 
+  def test_framework_argument_error_from_initializer_is_wrapped_as_runner_error
+    target = Class.new do
+      def initialize
+        raise Rubycli::ArgumentError, 'invalid constructor value'
+      end
+    end
+
+    error = assert_raises(Rubycli::Runner::Error) do
+      Rubycli::Runner.instantiate_target(target)
+    end
+
+    assert_equal 'Failed to instantiate target: invalid constructor value', error.message
+  end
+
   def test_auto_mode_selects_single_constant_when_names_differ
     Dir.mktmpdir do |dir|
       file = File.join(dir, 'cli_entry.rb')
@@ -503,6 +517,79 @@ class RunnerTest < Minitest::Test
     end
   end
 
+  def test_eval_binding_is_shared_between_initializer_and_command_within_one_execution
+    Dir.mktmpdir do |dir|
+      file = File.join(dir, 'shared_eval_binding_runner.rb')
+      File.write(file, <<~RUBY)
+        class SharedEvalBindingRunner
+          attr_reader :seed
+
+          # SEED [Integer]
+          def initialize(seed)
+            @seed = seed
+          end
+
+          # VALUE [Integer]
+          def add(value)
+            seed + value
+          end
+        end
+      RUBY
+
+      captured = nil
+      run_without_exit = ->(target, *_args) { Rubycli.cli.run(target, ARGV.dup, false) }
+      Rubycli.stub(:run, run_without_exit) do
+        Rubycli.stub(:call_target, ->(method, pos_args, _kw_args) {
+          captured = [method.receiver.seed, pos_args.first]
+          nil
+        }) do
+          Rubycli::Runner.execute(
+            file,
+            nil,
+            ['add', 'shared_seed + 2'],
+            new: true,
+            new_args: 'shared_seed = 40',
+            eval_args: true,
+            constant_mode: :strict
+          )
+        end
+      end
+
+      assert_equal [40, 42], captured
+    ensure
+      Object.send(:remove_const, :SharedEvalBindingRunner) if Object.const_defined?(:SharedEvalBindingRunner)
+    end
+  end
+
+  def test_eval_mode_is_disabled_while_loading_the_target_file
+    Dir.mktmpdir do |dir|
+      file = File.join(dir, 'eval_load_mode_runner.rb')
+      File.write(file, <<~RUBY)
+        class EvalLoadModeRunner
+          LOADED_WITH_EVAL_MODE = Rubycli.eval_mode?
+
+          def self.run
+            :ok
+          end
+        end
+      RUBY
+
+      Rubycli.stub(:run, ->(*) {}) do
+        Rubycli::Runner.execute(
+          file,
+          'EvalLoadModeRunner',
+          [],
+          eval_args: true,
+          constant_mode: :strict
+        )
+      end
+
+      assert_equal false, EvalLoadModeRunner::LOADED_WITH_EVAL_MODE
+    ensure
+      Object.send(:remove_const, :EvalLoadModeRunner) if Object.const_defined?(:EvalLoadModeRunner)
+    end
+  end
+
   def test_error_lists_candidates_when_multiple_callable_constants_exist
     Dir.mktmpdir do |dir|
       file = File.join(dir, 'multi_runner.rb')
@@ -559,6 +646,75 @@ class RunnerTest < Minitest::Test
       Rubycli.environment.clear_documentation_issues!
       Rubycli.environment.disable_doc_check!
       Object.send(:remove_const, :DocCheckRunner) if Object.const_defined?(:DocCheckRunner)
+    end
+  end
+
+  def test_check_lints_explicit_class_methods_defined_in_a_required_file
+    Dir.mktmpdir do |dir|
+      dependency = File.join(dir, 'dependency_check_runner.rb')
+      entry = File.join(dir, 'dependency_check_entry.rb')
+      File.write(dependency, <<~RUBY)
+        class DependencyCheckRunner
+          # @param name [String] Documented name
+          # @param extra [String] This param does not exist
+          def self.run(name)
+            name
+          end
+        end
+      RUBY
+      File.write(entry, "require #{dependency.inspect}\n")
+
+      Rubycli.documentation_registry.reset!
+      Rubycli.environment.clear_documentation_issues!
+
+      status = nil
+      _out, _err = capture_io do
+        status = Rubycli::Runner.check(entry, 'DependencyCheckRunner')
+      end
+
+      assert_equal 1, status
+      refute_empty Rubycli.environment.documentation_issues
+    ensure
+      Rubycli.documentation_registry.reset!
+      Rubycli.environment.clear_documentation_issues!
+      Rubycli.environment.disable_doc_check!
+      Object.send(:remove_const, :DependencyCheckRunner) if Object.const_defined?(:DependencyCheckRunner)
+    end
+  end
+
+  def test_check_lints_singleton_method_defined_from_an_external_proc
+    Dir.mktmpdir do |dir|
+      dependency = File.join(dir, 'external_check_proc.rb')
+      entry = File.join(dir, 'external_proc_check_runner.rb')
+      File.write(dependency, <<~RUBY)
+        # @param name [String] Documented name
+        # @param extra [String] This param does not exist
+        ExternalCheckProc = proc { |name| name }
+      RUBY
+      File.write(entry, <<~RUBY)
+        require #{dependency.inspect}
+
+        class ExternalProcCheckRunner
+          define_singleton_method(:run, &ExternalCheckProc)
+        end
+      RUBY
+
+      Rubycli.documentation_registry.reset!
+      Rubycli.environment.clear_documentation_issues!
+
+      status = nil
+      _out, _err = capture_io do
+        status = Rubycli::Runner.check(entry, 'ExternalProcCheckRunner')
+      end
+
+      assert_equal 1, status
+      refute_empty Rubycli.environment.documentation_issues
+    ensure
+      Rubycli.documentation_registry.reset!
+      Rubycli.environment.clear_documentation_issues!
+      Rubycli.environment.disable_doc_check!
+      Object.send(:remove_const, :ExternalProcCheckRunner) if Object.const_defined?(:ExternalProcCheckRunner)
+      Object.send(:remove_const, :ExternalCheckProc) if Object.const_defined?(:ExternalCheckProc)
     end
   end
 

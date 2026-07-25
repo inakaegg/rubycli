@@ -12,17 +12,27 @@ module Rubycli
       Thread.current[LAX_THREAD_KEY] == true
     end
 
-    def with_eval_mode(enabled = true, lax: false)
+    def with_eval_mode(enabled = true, lax: false, reuse_binding: false)
       previous = Thread.current[THREAD_KEY]
       previous_lax = Thread.current[LAX_THREAD_KEY]
       previous_binding = Thread.current[BINDING_THREAD_KEY]
       Thread.current[THREAD_KEY] = enabled
       Thread.current[LAX_THREAD_KEY] = enabled && lax
-      Thread.current[BINDING_THREAD_KEY] = isolated_binding if enabled
+      if enabled
+        Thread.current[BINDING_THREAD_KEY] = reuse_binding && previous_binding ? previous_binding : isolated_binding
+      end
       yield
     ensure
       Thread.current[THREAD_KEY] = previous
       Thread.current[LAX_THREAD_KEY] = previous_lax
+      Thread.current[BINDING_THREAD_KEY] = previous_binding
+    end
+
+    def with_eval_binding
+      previous_binding = Thread.current[BINDING_THREAD_KEY]
+      Thread.current[BINDING_THREAD_KEY] = isolated_binding
+      yield
+    ensure
       Thread.current[BINDING_THREAD_KEY] = previous_binding
     end
 

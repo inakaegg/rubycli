@@ -19,6 +19,15 @@ module RestHelpSamples
   end
 end
 
+module BareRestHelpSamples
+  module_function
+
+  # ITEMS [String] Items to collect
+  def collect(*items)
+    items
+  end
+end
+
 module OptionalPositionalHelpSamples
   module_function
 
@@ -120,6 +129,13 @@ class HelpRendererTest < Minitest::Test
 
     assert_includes usage, 'Usage: rubycli collect [VALUES...]'
     assert_includes usage, 'VALUES...  [Symbol[]]  optional  Values to collect'
+  end
+
+  def test_rest_parameter_usage_adds_ellipsis_to_bare_documented_placeholder
+    method = BareRestHelpSamples.method(:collect)
+    usage = @renderer.usage_for_method('collect', method)
+
+    assert_includes usage, 'Usage: rubycli collect [ITEMS...]'
   end
 
   def test_documented_optional_positional_is_bracketed_in_usage

@@ -331,8 +331,8 @@ module Rubycli
     def rest_placeholder(placeholder, definition, name)
       unless placeholder.nil? || placeholder.strip.empty? || auto_generated_placeholder?(placeholder, definition, name)
         documented = placeholder.strip
-        return documented if documented.start_with?('[') && documented.end_with?(']')
-
+        documented = documented[1..-2].strip if documented.start_with?('[') && documented.end_with?(']')
+        documented = "#{documented}..." unless documented.end_with?('...')
         return "[#{documented}]"
       end
 

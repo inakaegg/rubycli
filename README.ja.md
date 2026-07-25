@@ -274,6 +274,8 @@ Rubycli が角括弧を補います。
 受け付けます。スペース区切りの複数値（`--tags build test`）には対応しておらず、
 繰り返し注記のないオプションはスカラーのままです。`--strict` 実行時は各要素の型も
 検証されるため、`[String[]]` と書かれた注釈に対して `--tags [1,2]` を渡すとエラーになります。
+`--tags '["true","null"]'` のように引用された要素は、別のリテラルに見える内容でも文字列の
+まま保持されます。
 
 ### リテラル列挙（enum）
 
@@ -417,8 +419,10 @@ rubycli -E scripts/report_runner.rb publish \
   --channels '[:email, :slack]'
 ```
 
-評価は隔離された binding（`Object.new.instance_eval { binding }`）内で行われますが、
-入力そのものは信頼できる呼び出し元に限定してください。プログラムからは
+評価は隔離された binding（`Object.new.instance_eval { binding }`）内で行われます。
+1回の Runner 実行では、`--new=VALUE` のコンストラクタ引数と選択したコマンドの引数を含む
+すべての eval 引数が同じ binding を共有し、実行終了時に破棄されます。入力そのものは
+信頼できる呼び出し元に限定してください。プログラムからは
 `Rubycli.with_eval_mode(true) { ... }` で切り替えられます。
 
 `--eval-lax` / `-E` は `--eval-args` と同様に eval モードを有効にしつつ、Ruby として

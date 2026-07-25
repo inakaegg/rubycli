@@ -83,6 +83,342 @@ class ConstantCaptureTest < Minitest::Test
     end
   end
 
+  def test_records_assigned_alias_after_source_file_is_edited
+    capture = Rubycli::ConstantCapture.new
+    Tempfile.create(['edited_assigned_alias', '.rb']) do |file|
+      source = <<~RUBY
+        module CaptureEditedAliasSource
+          def self.run; end
+        end
+        CaptureEditedAssignedAlias = CaptureEditedAliasSource
+      RUBY
+      file.write(source)
+      file.flush
+
+      capture_io { capture.capture(file.path) { load file.path } }
+      file.rewind
+      file.truncate(0)
+      file.write("#{source}\n# harmless edit\n")
+      file.flush
+
+      capture_io { capture.capture(file.path) { load file.path } }
+
+      assert_includes capture.constants_for(file.path), 'CaptureEditedAssignedAlias'
+    ensure
+      cleanup_constant(:CaptureEditedAssignedAlias)
+      cleanup_constant(:CaptureEditedAliasSource)
+    end
+  end
+
+  def test_records_guarded_constant_after_source_file_is_edited
+    capture = Rubycli::ConstantCapture.new
+    Tempfile.create(['edited_guarded_constant', '.rb']) do |file|
+      source = <<~RUBY
+        CaptureGuardedRunner ||= Class.new do
+          def self.run; end
+        end
+      RUBY
+      file.write(source)
+      file.flush
+
+      capture_io { capture.capture(file.path) { load file.path } }
+      file.rewind
+      file.truncate(0)
+      file.write("#{source}\n# harmless edit\n")
+      file.flush
+
+      capture_io { capture.capture(file.path) { load file.path } }
+
+      assert_includes capture.constants_for(file.path), 'CaptureGuardedRunner'
+    ensure
+      cleanup_constant(:CaptureGuardedRunner)
+    end
+  end
+
+  def test_does_not_retain_assigned_alias_removed_from_edited_source
+    capture = Rubycli::ConstantCapture.new
+    Tempfile.create(['removed_assigned_alias', '.rb']) do |file|
+      file.write(<<~RUBY)
+        module CaptureRemovedAliasSource
+          def self.run; end
+        end
+        CaptureRemovedAssignedAlias = CaptureRemovedAliasSource
+      RUBY
+      file.flush
+
+      capture_io { capture.capture(file.path) { load file.path } }
+      file.rewind
+      file.truncate(0)
+      file.write(<<~RUBY)
+        module CaptureRemovedAliasSource
+          def self.run; end
+        end
+      RUBY
+      file.flush
+
+      capture_io { capture.capture(file.path) { load file.path } }
+
+      assert_includes capture.constants_for(file.path), 'CaptureRemovedAliasSource'
+      refute_includes capture.constants_for(file.path), 'CaptureRemovedAssignedAlias'
+    ensure
+      cleanup_constant(:CaptureRemovedAssignedAlias)
+      cleanup_constant(:CaptureRemovedAliasSource)
+    end
+  end
+
+  def test_records_qualified_and_absolute_aliases_after_source_file_is_edited
+    capture = Rubycli::ConstantCapture.new
+    Tempfile.create(['edited_qualified_aliases', '.rb']) do |file|
+      source = <<~RUBY
+        module CaptureQualifiedAliasOwner; end
+        module CaptureQualifiedAliasSource
+          def self.run; end
+        end
+        CaptureQualifiedAliasOwner::Runner = CaptureQualifiedAliasSource
+        ::CaptureAbsoluteAssignedAlias = CaptureQualifiedAliasSource
+      RUBY
+      file.write(source)
+      file.flush
+
+      capture_io { capture.capture(file.path) { load file.path } }
+      file.rewind
+      file.truncate(0)
+      file.write("#{source}\n# harmless edit\n")
+      file.flush
+
+      capture_io { capture.capture(file.path) { load file.path } }
+
+      assert_includes capture.constants_for(file.path), 'CaptureQualifiedAliasOwner::Runner'
+      assert_includes capture.constants_for(file.path), 'CaptureAbsoluteAssignedAlias'
+    ensure
+      if Object.const_defined?(:CaptureQualifiedAliasOwner)
+        owner = Object.const_get(:CaptureQualifiedAliasOwner)
+        owner.send(:remove_const, :Runner) if owner.const_defined?(:Runner, false)
+      end
+      cleanup_constant(:CaptureAbsoluteAssignedAlias)
+      cleanup_constant(:CaptureQualifiedAliasOwner)
+      cleanup_constant(:CaptureQualifiedAliasSource)
+    end
+  end
+
+  def test_records_multiple_assigned_aliases_after_source_file_is_edited
+    capture = Rubycli::ConstantCapture.new
+    Tempfile.create(['edited_multiple_aliases', '.rb']) do |file|
+      source = <<~RUBY
+        module CaptureMultipleAliasSource
+          def self.run; end
+        end
+        CaptureMultipleAliasOne, CaptureMultipleAliasTwo = CaptureMultipleAliasSource, CaptureMultipleAliasSource
+      RUBY
+      file.write(source)
+      file.flush
+
+      capture_io { capture.capture(file.path) { load file.path } }
+      file.rewind
+      file.truncate(0)
+      file.write("#{source}\n# harmless edit\n")
+      file.flush
+
+      capture_io { capture.capture(file.path) { load file.path } }
+
+      assert_includes capture.constants_for(file.path), 'CaptureMultipleAliasOne'
+      assert_includes capture.constants_for(file.path), 'CaptureMultipleAliasTwo'
+    ensure
+      cleanup_constant(:CaptureMultipleAliasOne)
+      cleanup_constant(:CaptureMultipleAliasTwo)
+      cleanup_constant(:CaptureMultipleAliasSource)
+    end
+  end
+
+  def test_does_not_retain_alias_when_edited_assignment_is_not_executed
+    capture = Rubycli::ConstantCapture.new
+    Tempfile.create(['skipped_edited_alias', '.rb']) do |file|
+      file.write(<<~RUBY)
+        module CaptureSkippedAliasSource
+          def self.run; end
+        end
+        CaptureSkippedAssignedAlias = CaptureSkippedAliasSource
+      RUBY
+      file.flush
+
+      capture_io { capture.capture(file.path) { load file.path } }
+      file.rewind
+      file.truncate(0)
+      file.write(<<~RUBY)
+        module CaptureSkippedAliasSource
+          def self.run; end
+        end
+        if false
+          CaptureSkippedAssignedAlias = CaptureSkippedAliasSource
+        end
+      RUBY
+      file.flush
+
+      capture_io { capture.capture(file.path) { load file.path } }
+
+      refute_includes capture.constants_for(file.path), 'CaptureSkippedAssignedAlias'
+    ensure
+      cleanup_constant(:CaptureSkippedAssignedAlias)
+      cleanup_constant(:CaptureSkippedAliasSource)
+    end
+  end
+
+  def test_retains_multiline_conditional_alias_when_assignment_executes_after_edit
+    capture = Rubycli::ConstantCapture.new
+    Tempfile.create(['executed_conditional_edited_alias', '.rb']) do |file|
+      source = <<~RUBY
+        module CaptureExecutedConditionalAliasSource
+          def self.run; end
+        end
+        enabled = true
+        if enabled
+          CaptureExecutedConditionalAssignedAlias = CaptureExecutedConditionalAliasSource
+        end
+      RUBY
+      file.write(source)
+      file.flush
+
+      capture_io { capture.capture(file.path) { load file.path } }
+      file.rewind
+      file.truncate(0)
+      file.write("#{source}\n# harmless edit\n")
+      file.flush
+
+      capture_io { capture.capture(file.path) { load file.path } }
+
+      assert_includes capture.constants_for(file.path), 'CaptureExecutedConditionalAssignedAlias'
+    ensure
+      cleanup_constant(:CaptureExecutedConditionalAssignedAlias)
+      cleanup_constant(:CaptureExecutedConditionalAliasSource)
+    end
+  end
+
+  def test_does_not_retain_multiline_conditional_alias_when_runtime_guard_changes
+    capture = Rubycli::ConstantCapture.new
+    Tempfile.create(['disabled_conditional_edited_alias', '.rb']) do |file|
+      file.write(<<~RUBY)
+        module CaptureDisabledConditionalAliasSource
+          def self.run; end
+        end
+        enabled = true
+        if enabled
+          CaptureDisabledConditionalAssignedAlias = CaptureDisabledConditionalAliasSource
+        end
+      RUBY
+      file.flush
+
+      capture_io { capture.capture(file.path) { load file.path } }
+      file.rewind
+      file.truncate(0)
+      file.write(<<~RUBY)
+        module CaptureDisabledConditionalAliasSource
+          def self.run; end
+        end
+        enabled = false
+        if enabled
+          CaptureDisabledConditionalAssignedAlias = CaptureDisabledConditionalAliasSource
+        end
+      RUBY
+      file.flush
+
+      capture_io { capture.capture(file.path) { load file.path } }
+
+      refute_includes capture.constants_for(file.path), 'CaptureDisabledConditionalAssignedAlias'
+    ensure
+      cleanup_constant(:CaptureDisabledConditionalAssignedAlias)
+      cleanup_constant(:CaptureDisabledConditionalAliasSource)
+    end
+  end
+
+  def test_does_not_retain_alias_when_edited_assignment_is_short_circuited
+    capture = Rubycli::ConstantCapture.new
+    Tempfile.create(['short_circuited_edited_alias', '.rb']) do |file|
+      file.write(<<~RUBY)
+        module CaptureShortCircuitedAliasSource
+          def self.run; end
+        end
+        CaptureShortCircuitedAssignedAlias = CaptureShortCircuitedAliasSource
+      RUBY
+      file.flush
+
+      capture_io { capture.capture(file.path) { load file.path } }
+      file.rewind
+      file.truncate(0)
+      file.write(<<~RUBY)
+        module CaptureShortCircuitedAliasSource
+          def self.run; end
+        end
+        false && (CaptureShortCircuitedAssignedAlias = CaptureShortCircuitedAliasSource)
+      RUBY
+      file.flush
+
+      capture_io { capture.capture(file.path) { load file.path } }
+
+      refute_includes capture.constants_for(file.path), 'CaptureShortCircuitedAssignedAlias'
+    ensure
+      cleanup_constant(:CaptureShortCircuitedAssignedAlias)
+      cleanup_constant(:CaptureShortCircuitedAliasSource)
+    end
+  end
+
+  def test_does_not_retain_alias_when_edited_postfix_assignment_is_skipped
+    capture = Rubycli::ConstantCapture.new
+    Tempfile.create(['postfix_skipped_edited_alias', '.rb']) do |file|
+      file.write(<<~RUBY)
+        module CapturePostfixSkippedAliasSource
+          def self.run; end
+        end
+        CapturePostfixSkippedAssignedAlias = CapturePostfixSkippedAliasSource
+      RUBY
+      file.flush
+
+      capture_io { capture.capture(file.path) { load file.path } }
+      file.rewind
+      file.truncate(0)
+      file.write(<<~RUBY)
+        module CapturePostfixSkippedAliasSource
+          def self.run; end
+        end
+        CapturePostfixSkippedAssignedAlias = CapturePostfixSkippedAliasSource if false
+      RUBY
+      file.flush
+
+      capture_io { capture.capture(file.path) { load file.path } }
+
+      refute_includes capture.constants_for(file.path), 'CapturePostfixSkippedAssignedAlias'
+    ensure
+      cleanup_constant(:CapturePostfixSkippedAssignedAlias)
+      cleanup_constant(:CapturePostfixSkippedAliasSource)
+    end
+  end
+
+  def test_records_const_set_alias_after_source_file_is_edited
+    capture = Rubycli::ConstantCapture.new
+    Tempfile.create(['edited_const_set_alias', '.rb']) do |file|
+      source = <<~RUBY
+        module CaptureConstSetAliasSource
+          def self.run; end
+        end
+        Object.const_set(:CaptureConstSetAssignedAlias, CaptureConstSetAliasSource)
+      RUBY
+      file.write(source)
+      file.flush
+
+      capture_io { capture.capture(file.path) { load file.path } }
+      file.rewind
+      file.truncate(0)
+      file.write("#{source}\n# harmless edit\n")
+      file.flush
+
+      capture_io { capture.capture(file.path) { load file.path } }
+
+      assert_includes capture.constants_for(file.path), 'CaptureConstSetAssignedAlias'
+    ensure
+      cleanup_constant(:CaptureConstSetAssignedAlias)
+      cleanup_constant(:CaptureConstSetAliasSource)
+    end
+  end
+
   private
 
   def cleanup_constant(name)

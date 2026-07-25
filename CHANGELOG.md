@@ -8,10 +8,13 @@
 - Required options accept negative exponent notation such as `-1e3` without mistaking it for another option.
 - Constant discovery now includes classes and modules assigned with `Class.new` / `Module.new` during the target file load.
 - Repeated loads retain assigned constant aliases when the source file is unchanged.
+- Repeated loads after source edits retain aliases created by direct, guarded, multiple, and `const_set` assignments while their active definitions remain, without reviving aliases behind newly disabled conditions.
 - Constructor arity errors raised by `--new` are now wrapped in Rubycli's user-facing runner error.
+- Framework argument errors raised by constructors are also wrapped in the same user-facing runner error.
 - Positional type conversion now waits for JSON/eval coercion, matching keyword-option behavior and preserving `--new` JSON/eval inputs.
 - Runner tests now execute without terminating the Minitest process and assert converted command arguments instead of stubbed targets.
 - `--check --new` now inspects exposed instance/class commands without running constructors, while `--check` rejects pre-scripts instead of evaluating them.
+- `--check` now inspects explicitly selected commands even when their methods or defining procs come from required files.
 - Explicit nested constant names no longer fall back to inherited top-level constants, and malformed pre-scripts now produce contextual Rubycli errors.
 - Rest, optional-before-required, and trailing-required positional arguments now follow Ruby's argument binding rules for conversion, validation, and help output.
 - Documented scalar/list conversions now preserve numeric-looking strings, handle repeated booleans, return real `DateTime` values, accept JSON arrays, and reject scalar/array values where `JSON`/`Hash` shapes do not allow them.
@@ -19,12 +22,15 @@
 - Assignment-like positional values remain positional unless they match a keyword, while matching assignments use the same documented conversion as long options.
 - YARD positional tags are aligned by parameter name instead of comment order.
 - Eval-mode local variables and command-line strict/check/result-output flags no longer leak across separate programmatic runs.
+- Constructor and command eval arguments share one binding per Runner execution without enabling eval mode while the target file loads.
+- Required options accept a lone `-` value, bare rest placeholders render with an ellipsis, and quoted `String[]` elements remain strings.
 - Invalid Ruby syntax passed through strict eval mode now produces a user-facing Rubycli argument error instead of leaking a `SyntaxError` backtrace.
 - Circular arrays/hashes returned by commands now fall back to inspected output instead of raising a JSON nesting error.
 
 ### Testing
 - Added dependency-free overall line, branch, and changed-line coverage gates plus GitHub Actions checks spanning the supported Ruby range.
 - Changed-line coverage now treats new library files that were never loaded by the test suite as uncovered.
+- Push coverage compares against the previous commit and falls back to the default branch when a new ref has no previous commit or a ref is deleted.
 
 ## [0.1.7] - 2025-11-12
 

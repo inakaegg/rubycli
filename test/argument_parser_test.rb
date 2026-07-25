@@ -120,6 +120,11 @@ module ScalarTypeSamples
     codes
   end
 
+  # --codes VALUES... [Array<String>] Generic string codes
+  def generic_string_list(codes:)
+    codes
+  end
+
   # --flags VALUES... [Boolean] Boolean flags
   def boolean_list(flags:)
     flags
@@ -170,6 +175,15 @@ class ArgumentParserTest < Minitest::Test
 
     assert_equal ['Alice'], pos_args
     assert_equal({ greeting: true }, kw_args)
+  end
+
+  def test_required_option_accepts_lone_dash_as_its_value
+    method = StdTypeSamples.method(:ingest)
+
+    pos_args, kw_args = @parser.parse(['--input', '-'], method)
+
+    assert_empty pos_args
+    assert_equal Pathname.new('-'), kw_args[:input]
   end
 
   def test_double_dash_preserves_following_option_like_values_as_positionals
@@ -471,6 +485,28 @@ class ArgumentParserTest < Minitest::Test
 
     assert_empty pos_args
     assert_equal({ codes: ['001'] }, kw_args)
+  end
+
+  def test_string_array_annotation_preserves_quoted_boolean_and_null_tokens
+    method = ScalarTypeSamples.method(:string_list)
+
+    pos_args, kw_args = @parser.parse(['--codes', '["true","null"]'], method)
+
+    assert_empty pos_args
+    assert_equal({ codes: %w[true null] }, kw_args)
+    @environment.enable_strict_input!
+    assert_silent { @parser.validate_inputs(method, pos_args, kw_args) }
+  end
+
+  def test_generic_string_array_annotation_preserves_quoted_boolean_and_null_tokens
+    method = ScalarTypeSamples.method(:generic_string_list)
+
+    pos_args, kw_args = @parser.parse(['--codes', '["true","null"]'], method)
+
+    assert_empty pos_args
+    assert_equal({ codes: %w[true null] }, kw_args)
+    @environment.enable_strict_input!
+    assert_silent { @parser.validate_inputs(method, pos_args, kw_args) }
   end
 
   def test_required_repeated_boolean_option_consumes_and_converts_its_value
