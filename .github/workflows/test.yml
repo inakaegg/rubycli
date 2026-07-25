@@ -27,8 +27,11 @@ jobs:
         uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1
         with:
           ruby-version: ${{ matrix.ruby }}
+      - name: Install Ruby 4 test compatibility
+        if: matrix.ruby == '4.0'
+        run: gem install minitest-mock --version 5.27.0 --no-document
       - name: Run tests
-        run: ruby -Ilib:test -e 'Dir["test/*_test.rb"].sort.each { |file| require_relative file }'
+        run: ruby -Ilib:test -e 'Dir["test/*_test.rb"].sort.each { |file| require File.expand_path(file) }'
 
   coverage:
     name: Coverage
