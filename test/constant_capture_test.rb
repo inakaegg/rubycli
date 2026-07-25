@@ -652,6 +652,8 @@ class ConstantCaptureTest < Minitest::Test
         CaptureEquivalentGuardOwner.const_defined?(:Runner, false) || (CaptureEquivalentGuardOwner::Runner = CaptureEquivalentGuardSource)
         CaptureNegatedGuardAlias = CaptureEquivalentGuardSource if !(defined?(CaptureNegatedGuardAlias))
         defined?(CaptureTernaryGuardAlias) ? nil : (CaptureTernaryGuardAlias = CaptureEquivalentGuardSource)
+        CaptureNilPredicateGuardAlias = CaptureEquivalentGuardSource if defined?(CaptureNilPredicateGuardAlias).nil?
+        CaptureNilEqualityGuardAlias = CaptureEquivalentGuardSource if defined?(CaptureNilEqualityGuardAlias) == nil
         install = -> { CaptureLambdaGuardAlias = CaptureEquivalentGuardSource unless defined?(CaptureLambdaGuardAlias) }
         install.call
       RUBY
@@ -661,6 +663,8 @@ class ConstantCaptureTest < Minitest::Test
         CaptureEquivalentGuardOwner::Runner
         CaptureNegatedGuardAlias
         CaptureTernaryGuardAlias
+        CaptureNilPredicateGuardAlias
+        CaptureNilEqualityGuardAlias
         CaptureLambdaGuardAlias
       ]
       2.times do
@@ -678,6 +682,8 @@ class ConstantCaptureTest < Minitest::Test
       cleanup_constant(:CaptureEquivalentGuardSource)
       cleanup_constant(:CaptureNegatedGuardAlias)
       cleanup_constant(:CaptureTernaryGuardAlias)
+      cleanup_constant(:CaptureNilPredicateGuardAlias)
+      cleanup_constant(:CaptureNilEqualityGuardAlias)
       cleanup_constant(:CaptureLambdaGuardAlias)
     end
   end

@@ -454,6 +454,15 @@ class ArgumentParserTest < Minitest::Test
     end
   end
 
+  def test_required_integer_option_accepts_negative_decimal_with_separator
+    method = IntegerOptionSamples.method(:count)
+
+    pos_args, kw_args = @parser.parse(['--count', '-1_000'], method)
+
+    assert_empty pos_args
+    assert_equal({ count: -1000 }, kw_args)
+  end
+
   def test_json_type_accepts_an_array_literal
     method = JsonTypeSamples.method(:accept)
 

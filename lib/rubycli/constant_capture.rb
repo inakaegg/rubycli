@@ -466,11 +466,26 @@ module Rubycli
 
           condition = condition[2]
           expected = !expected
+        when :call
+          break unless condition.dig(3, 1) == 'nil?'
+
+          condition = condition[1]
+          expected = !expected
+        when :binary
+          left, operator, right = condition.drop(1)
+          break unless operator == :== && nil_literal?(right)
+
+          condition = left
+          expected = !expected
         else
           break
         end
       end
       [condition, expected]
+    end
+
+    def nil_literal?(node)
+      node&.first == :var_ref && node.dig(1, 0) == :@kw && node.dig(1, 1) == 'nil'
     end
 
     def guarded_constant_name(condition, namespace)
