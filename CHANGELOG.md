@@ -17,7 +17,7 @@
 - `--check` now inspects explicitly selected commands even when their methods or defining procs come from required files.
 - Explicit nested constant names no longer fall back to inherited top-level constants, and malformed pre-scripts now produce contextual Rubycli errors.
 - Rest, optional-before-required, and trailing-required positional arguments now follow Ruby's argument binding rules for conversion, validation, and help output.
-- Documented scalar/list conversions now preserve numeric-looking strings, handle repeated booleans, return real `DateTime` values, accept JSON arrays, and reject scalar/array values where `JSON`/`Hash` shapes do not allow them.
+- Documented scalar/list conversions now preserve numeric-, boolean-, and null-looking strings, handle repeated booleans, return real `DateTime` values, accept JSON arrays, and reject scalar/array values where `JSON`/`Hash` shapes do not allow them.
 - Positional `Symbol` annotations preserve colon-prefixed symbol literals instead of embedding the colon in the symbol name.
 - Assignment-like positional values remain positional unless they match a keyword, while matching assignments use the same documented conversion as long options.
 - YARD positional tags are aligned by parameter name instead of comment order.

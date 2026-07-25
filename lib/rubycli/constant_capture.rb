@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-require 'digest'
 require 'ripper'
 
 module Rubycli
@@ -8,14 +7,11 @@ module Rubycli
   class ConstantCapture
     def initialize
       @captured = Hash.new { |hash, key| hash[key] = [] }
-      @source_fingerprints = {}
       @assignment_definitions = {}
     end
 
     def capture(file)
       normalized_file = normalize(file)
-      source_fingerprint = Digest::SHA256.file(normalized_file).hexdigest
-      source_unchanged = @source_fingerprints[normalized_file] == source_fingerprint
       previous_names = @captured[normalized_file].dup
       previous_assignment_definitions = @assignment_definitions.fetch(normalized_file, {})
       current_assignment_definitions = assigned_constant_definitions(normalized_file)
@@ -50,10 +46,9 @@ module Rubycli
             executed_lines,
             assignment_events
           )
-          after_snapshot.key?(name) && (source_unchanged || definition_active)
+          after_snapshot.key?(name) && definition_active
         end
         @captured[normalized_file].concat(changed_names).concat(retained_names)
-        @source_fingerprints[normalized_file] = source_fingerprint
         @assignment_definitions[normalized_file] = current_assignment_definitions
       end
     end
@@ -253,7 +248,7 @@ module Rubycli
         collect_assigned_constant_definitions(node[2], namespace, contexts, definitions)
         body_context = contexts + [[[node.first, canonical_syntax(node[2])], source_line(node[1])]]
         collect_assigned_constant_definitions(node[3], namespace, body_context, definitions)
-      when :lambda, :do_block, :brace_block
+      when :def, :defs, :lambda, :do_block, :brace_block
         lazy_context = contexts + [[[node.first], source_line(node)]]
         node.drop(1).each do |child|
           collect_assigned_constant_definitions(child, namespace, lazy_context, definitions)
@@ -307,7 +302,8 @@ module Rubycli
         signature: signature,
         line: line,
         ambiguous_line: false,
-        persistent: contexts.empty? || const_defined_guard?(contexts, assigned_name)
+        persistent: contexts.empty? ||
+          (const_defined_guard?(contexts, assigned_name) && !lazy_context?(contexts))
       }
       definitions[assigned_name] = Array(definitions[assigned_name]) | [definition]
     end
@@ -353,6 +349,11 @@ module Rubycli
         has_constant = find_syntax_token(context) { |_type, value| value == constant_name }
         has_method && has_constant
       end
+    end
+
+    def lazy_context?(contexts)
+      lazy_types = %i[def defs lambda do_block brace_block]
+      contexts.any? { |context, _line| lazy_types.include?(context.first) }
     end
 
     def find_syntax_token(node, &predicate)

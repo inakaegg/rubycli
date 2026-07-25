@@ -178,13 +178,13 @@ class ArgumentParserTest < Minitest::Test
     assert_includes error.message, "Option '--greeting' requires a value"
   end
 
-  def test_required_option_accepts_true_as_an_explicit_value
+  def test_required_string_option_accepts_true_as_an_explicit_value
     method = DocExamples::TaggedSamples.new.method(:greet)
 
     pos_args, kw_args = @parser.parse(['Alice', '--greeting', 'true'], method)
 
     assert_equal ['Alice'], pos_args
-    assert_equal({ greeting: true }, kw_args)
+    assert_equal({ greeting: 'true' }, kw_args)
   end
 
   def test_required_option_accepts_lone_dash_as_its_value
@@ -468,6 +468,19 @@ class ArgumentParserTest < Minitest::Test
     assert_equal({ label: '00456' }, kw_args)
     @environment.enable_strict_input!
     assert_silent { @parser.validate_inputs(method, pos_args, kw_args) }
+  end
+
+  def test_string_annotations_preserve_boolean_and_null_looking_tokens
+    method = ScalarTypeSamples.method(:strings)
+
+    %w[true false null].each do |token|
+      pos_args, kw_args = @parser.parse([token, '--label', token], method)
+
+      assert_equal [token], pos_args
+      assert_equal({ label: token }, kw_args)
+      @environment.enable_strict_input!
+      assert_silent { @parser.validate_inputs(method, pos_args, kw_args) }
+    end
   end
 
   def test_symbol_annotation_converts_numeric_looking_token

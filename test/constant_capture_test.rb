@@ -330,6 +330,39 @@ class ConstantCaptureTest < Minitest::Test
     end
   end
 
+  def test_does_not_retain_alias_from_inactive_branch_when_source_is_unchanged
+    capture = Rubycli::ConstantCapture.new
+    previous_mode = ENV['RUBYCLI_CAPTURE_MODE']
+    Tempfile.create(['unchanged_dynamic_alias', '.rb']) do |file|
+      file.write(<<~RUBY)
+        module CaptureDynamicAliasSource
+          def self.run; end
+        end
+        if ENV['RUBYCLI_CAPTURE_MODE'] == 'a'
+          CaptureDynamicAliasA = CaptureDynamicAliasSource
+        else
+          CaptureDynamicAliasB = CaptureDynamicAliasSource
+        end
+      RUBY
+      file.flush
+
+      ENV['RUBYCLI_CAPTURE_MODE'] = 'a'
+      capture_io { capture.capture(file.path) { load file.path } }
+      assert_includes capture.constants_for(file.path), 'CaptureDynamicAliasA'
+
+      ENV['RUBYCLI_CAPTURE_MODE'] = 'b'
+      capture_io { capture.capture(file.path) { load file.path } }
+
+      refute_includes capture.constants_for(file.path), 'CaptureDynamicAliasA'
+      assert_includes capture.constants_for(file.path), 'CaptureDynamicAliasB'
+    ensure
+      ENV['RUBYCLI_CAPTURE_MODE'] = previous_mode
+      cleanup_constant(:CaptureDynamicAliasA)
+      cleanup_constant(:CaptureDynamicAliasB)
+      cleanup_constant(:CaptureDynamicAliasSource)
+    end
+  end
+
   def test_does_not_retain_alias_when_edited_assignment_is_short_circuited
     capture = Rubycli::ConstantCapture.new
     Tempfile.create(['short_circuited_edited_alias', '.rb']) do |file|
@@ -472,6 +505,40 @@ class ConstantCaptureTest < Minitest::Test
     ensure
       cleanup_constant(:CaptureGuardedConstSetAssignedAlias)
       cleanup_constant(:CaptureGuardedConstSetAliasSource)
+    end
+  end
+
+  def test_does_not_retain_const_set_moved_into_uninvoked_method
+    capture = Rubycli::ConstantCapture.new
+    Tempfile.create(['deferred_const_set_alias', '.rb']) do |file|
+      file.write(<<~RUBY)
+        module CaptureDeferredConstSetAliasSource
+          def self.run; end
+        end
+        Object.const_set(:CaptureDeferredConstSetAssignedAlias, CaptureDeferredConstSetAliasSource)
+      RUBY
+      file.flush
+
+      capture_io { capture.capture(file.path) { load file.path } }
+      file.rewind
+      file.truncate(0)
+      file.write(<<~RUBY)
+        module CaptureDeferredConstSetAliasSource
+          def self.run; end
+        end
+        def capture_install_deferred_alias
+          Object.const_set(:CaptureDeferredConstSetAssignedAlias, CaptureDeferredConstSetAliasSource)
+        end
+      RUBY
+      file.flush
+
+      capture_io { capture.capture(file.path) { load file.path } }
+
+      refute_includes capture.constants_for(file.path), 'CaptureDeferredConstSetAssignedAlias'
+    ensure
+      Object.send(:remove_method, :capture_install_deferred_alias) if Object.private_method_defined?(:capture_install_deferred_alias)
+      cleanup_constant(:CaptureDeferredConstSetAssignedAlias)
+      cleanup_constant(:CaptureDeferredConstSetAliasSource)
     end
   end
 

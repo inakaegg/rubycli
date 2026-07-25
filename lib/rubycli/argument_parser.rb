@@ -674,14 +674,7 @@ module Rubycli
 
       case normalized
       when 'String'
-        ->(value) {
-          converted_value = convert_arg(value)
-          if value.is_a?(String) && converted_value.is_a?(Numeric)
-            value
-          else
-            converted_value
-          end
-        }
+        ->(value) { value }
       when 'Integer', 'Fixnum'
         ->(value) { Integer(value) }
       when 'Float'
