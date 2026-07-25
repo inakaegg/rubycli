@@ -571,11 +571,11 @@ module Rubycli
 
         method_obj.parameters.each do |type, name|
           case type
-          when :req, :opt
-            doc = positional_defs.shift
+          when :req, :opt, :rest
+            doc = take_positional_definition(positional_defs, name)
             if doc
               doc.param_name = name
-              doc.default_value = defaults[name]
+              doc.default_value = type == :rest ? [] : defaults[name]
               positional_map[name] = doc
             else
               @environment.handle_documentation_issue(
@@ -587,10 +587,10 @@ module Rubycli
                 fallback = PositionalDefinition.new(
                   placeholder: name.to_s,
                   label: name.to_s.upcase,
-                  types: ['String'],
+                  types: [type == :rest ? 'String[]' : 'String'],
                   description: nil,
                   param_name: name,
-                  default_value: defaults[name],
+                  default_value: type == :rest ? [] : defaults[name],
                   inline_type_annotation: false,
                   inline_type_text: nil,
                   doc_format: :auto_generated,
@@ -658,6 +658,18 @@ module Rubycli
             end
           end
         end
+      end
+
+      def take_positional_definition(positional_defs, parameter_name)
+        tagged_index = positional_defs.index do |definition|
+          definition.doc_format == :tagged_param && definition.param_name == parameter_name
+        end
+        return positional_defs.delete_at(tagged_index) if tagged_index
+
+        tagless_index = positional_defs.index { |definition| definition.doc_format != :tagged_param }
+        return positional_defs.delete_at(tagless_index) if tagless_index
+
+        nil
       end
 
       def detail_line_for_extra_positional(doc)

@@ -247,7 +247,7 @@ module Rubycli
     end
 
     def positional_requirement(kind)
-      kind == :opt ? 'optional' : 'required'
+      %i[opt rest].include?(kind) ? 'optional' : 'required'
     end
 
     def positional_default(definition)
@@ -272,7 +272,7 @@ module Rubycli
     def ordered_positionals(method, metadata)
       positional_map = metadata[:positionals_map] || {}
       method.parameters.each_with_object([]) do |(type, name), memo|
-        next unless %i[req opt].include?(type)
+        next unless %i[req opt rest].include?(type)
 
         definition = positional_map[name]
         label = display_label_for(definition, name)
@@ -319,7 +319,10 @@ module Rubycli
 
     def optional_placeholder(placeholder, definition, name)
       unless placeholder.nil? || placeholder.strip.empty? || auto_generated_placeholder?(placeholder, definition, name)
-        return placeholder.strip
+        documented = placeholder.strip
+        return documented if documented.start_with?('[') && documented.end_with?(']')
+
+        return "[#{documented}]"
       end
 
       "[#{default_positional_label(definition, name, uppercase: true)}]"
@@ -327,7 +330,10 @@ module Rubycli
 
     def rest_placeholder(placeholder, definition, name)
       unless placeholder.nil? || placeholder.strip.empty? || auto_generated_placeholder?(placeholder, definition, name)
-        return placeholder.strip
+        documented = placeholder.strip
+        return documented if documented.start_with?('[') && documented.end_with?(']')
+
+        return "[#{documented}]"
       end
 
       base = default_positional_label(definition, name, uppercase: true)

@@ -18,6 +18,7 @@ module Rubycli
 
     def parse(args, method = nil)
       pos_args = []
+      raw_pos_args = []
       kw_args = {}
 
       kw_param_names = extract_keyword_parameter_names(method)
@@ -37,8 +38,9 @@ module Rubycli
 
         if token == '--'
           stream.advance
-          rest_tokens = stream.consume_remaining.map { |value| convert_arg(value) }
-          pos_args.concat(rest_tokens)
+          rest_tokens = stream.consume_remaining
+          raw_pos_args.concat(rest_tokens)
+          pos_args.concat(rest_tokens.map { |value| convert_arg(value) })
           break
         elsif option_token?(token)
           stream.advance
@@ -52,16 +54,17 @@ module Rubycli
             type_converters,
             required_kw_param_names
           )
-        elsif assignment_token?(token)
+        elsif assignment_token_for_method?(token, method, kw_param_names)
           stream.advance
-          process_assignment_token(token, kw_args)
+          process_assignment_token(token, kw_args, option_lookup, type_converters)
         else
+          raw_pos_args << token
           pos_args << convert_arg(token)
           stream.advance
         end
       end
 
-      pos_args = convert_positional_arguments(pos_args, method, metadata)
+      pos_args = convert_positional_arguments(pos_args, raw_pos_args, method, metadata)
       debug_log "Final parsed - pos_args: #{pos_args.inspect}, kw_args: #{kw_args.inspect}"
       [pos_args, kw_args]
     end
@@ -102,8 +105,13 @@ module Rubycli
       token =~ /\A-{1,2}([a-zA-Z0-9_-]+)(?:=(.*))?\z/
     end
 
-    def assignment_token?(token)
-      !split_assignment_token(token).nil?
+    def assignment_token_for_method?(token, method, kw_param_names)
+      key, = split_assignment_token(token)
+      return false unless key
+      return true unless method
+      return true if kw_param_names.include?(key)
+
+      method.parameters.any? { |type, _| type == :keyrest }
     end
 
     def process_option_token(
@@ -196,9 +204,11 @@ module Rubycli
       end
     end
 
-    def process_assignment_token(token, kw_args)
+    def process_assignment_token(token, kw_args, option_lookup, type_converters)
       key, value = split_assignment_token(token)
-      kw_args[key.to_sym] = convert_arg(value)
+      keyword = key.to_sym
+      option_meta = option_lookup[keyword]
+      kw_args[keyword] = convert_option_value(keyword, value, option_meta, type_converters)
     end
 
     def split_assignment_token(token)
@@ -211,7 +221,7 @@ module Rubycli
       [key, value]
     end
 
-    def convert_positional_arguments(pos_args, method, metadata)
+    def convert_positional_arguments(pos_args, raw_pos_args, method, metadata)
       return pos_args unless method
       return pos_args if Rubycli.eval_mode? || Rubycli.json_mode?
 
@@ -219,24 +229,93 @@ module Rubycli
       return pos_args if positional_map.empty?
 
       converted = pos_args.dup
-      method.parameters.each_with_index do |(type, name), index|
-        next unless %i[req opt].include?(type)
+      positional_argument_bindings(method, converted.size).each do |type, name, indexes|
         definition = positional_map[name]
         next unless definition
-        next if index >= converted.size
 
-        converter = converter_for_definition(definition)
-        next unless converter
+        case type
+        when :req, :opt
+          index = indexes.first
+          next unless index
 
-        begin
-          converted[index] = converter.call(converted[index])
-        rescue StandardError => e
+          converter = converter_for_definition(definition)
+          next unless converter
+
+          begin
+            converted[index] = converter.call(raw_pos_args[index])
+          rescue StandardError => e
+            label = definition.label || definition.placeholder || name.to_s.upcase
+            raise ArgumentError, "Value '#{converted[index]}' for #{label} is invalid: #{e.message}"
+          end
+        when :rest
+          next if indexes.empty?
+
+          converter = converter_for_rest_definition(definition)
+          next unless converter
+
           label = definition.label || definition.placeholder || name.to_s.upcase
-          raise ArgumentError, "Value '#{converted[index]}' for #{label} is invalid: #{e.message}"
+          indexes.each do |index|
+            value = raw_pos_args[index]
+            converted[index] = converter.call(value)
+          rescue StandardError => e
+            raise ArgumentError, "Value '#{value}' for #{label} is invalid: #{e.message}"
+          end
         end
       end
 
       converted
+    end
+
+    def positional_argument_bindings(method_obj, argument_count)
+      parameters = method_obj.parameters.select { |type, _| %i[req opt rest].include?(type) }
+      first_flexible = parameters.index { |type, _| %i[opt rest].include?(type) }
+
+      unless first_flexible
+        return parameters.each_with_index.map do |(type, name), index|
+          [type, name, index < argument_count ? [index] : []]
+        end
+      end
+
+      last_flexible = parameters.rindex { |type, _| %i[opt rest].include?(type) }
+      bindings = []
+      cursor = 0
+
+      parameters[0...first_flexible].each do |type, name|
+        indexes = cursor < argument_count ? [cursor] : []
+        bindings << [type, name, indexes]
+        cursor += 1 unless indexes.empty?
+      end
+
+      trailing = parameters[(last_flexible + 1)..] || []
+      trailing_start = [argument_count - trailing.size, cursor].max
+      middle_end = [trailing_start, argument_count].min
+
+      parameters[first_flexible..last_flexible].each do |type, name|
+        indexes = if type == :rest
+                    (cursor...middle_end).to_a
+                  elsif cursor < middle_end
+                    [cursor]
+                  else
+                    []
+                  end
+        bindings << [type, name, indexes]
+        cursor += indexes.size
+      end
+
+      trailing.each_with_index do |(type, name), offset|
+        index = trailing_start + offset
+        bindings << [type, name, index < argument_count ? [index] : []]
+      end
+
+      bindings
+    end
+
+    def converter_for_rest_definition(definition)
+      scalar_types = Array(definition.types).compact.map do |type|
+        normalized = type.to_s.strip
+        array_inner_type(normalized) || normalized
+      end
+      build_converter_for_types(scalar_types)
     end
 
     def converter_for_definition(definition)
@@ -250,13 +329,17 @@ module Rubycli
         if normalized.start_with?('Array<') && normalized.end_with?('>')
           inner = normalized[6..-2].strip
           element_converter = converter_for_single_type(inner)
-          return ->(value) { TypeUtils.parse_list(value).map { |item| element_converter ? element_converter.call(item) : item } }
+          return ->(value) {
+            list_items(value).map { |item| element_converter ? element_converter.call(item) : item }
+          }
         elsif normalized.end_with?('[]')
           inner = normalized[0..-3]
           element_converter = converter_for_single_type(inner)
-          return ->(value) { TypeUtils.parse_list(value).map { |item| element_converter ? element_converter.call(item) : item } }
+          return ->(value) {
+            list_items(value).map { |item| element_converter ? element_converter.call(item) : item }
+          }
         elsif normalized.casecmp('Array').zero?
-          return ->(value) { TypeUtils.parse_list(value) }
+          return ->(value) { list_items(value) }
         else
           single = converter_for_single_type(normalized)
           return single if single
@@ -290,15 +373,23 @@ module Rubycli
       return if positional_args.nil? || positional_args.empty?
 
       positional_map = metadata[:positionals_map] || {}
-      ordered_params = method_obj.parameters.select { |type, _| %i[req opt].include?(type) }
-
-      ordered_params.each_with_index do |(_, name), index|
+      positional_argument_bindings(method_obj, positional_args.size).each do |type, name, indexes|
         definition = positional_map[name]
         next unless definition
-        next if index >= positional_args.size
-
         label = definition.label || definition.placeholder || name.to_s.upcase
-        enforce_value_against_definition(definition, positional_args[index], label)
+
+        case type
+        when :req, :opt
+          index = indexes.first
+          next unless index
+
+          enforce_value_against_definition(definition, positional_args[index], label)
+        when :rest
+          next if indexes.empty?
+
+          values = indexes.map { |index| positional_args[index] }
+          enforce_value_against_definition(definition, values, label)
+        end
       end
     end
 
@@ -579,7 +670,14 @@ module Rubycli
 
       case normalized
       when 'String'
-        ->(value) { value }
+        ->(value) {
+          converted_value = convert_arg(value)
+          if value.is_a?(String) && converted_value.is_a?(Numeric)
+            value
+          else
+            converted_value
+          end
+        }
       when 'Integer', 'Fixnum'
         ->(value) { Integer(value) }
       when 'Float'
@@ -604,14 +702,31 @@ module Rubycli
       when 'Date'
         require 'date'
         ->(value) { Date.parse(value) }
-      when 'Time', 'DateTime'
+      when 'Time'
         require 'time'
         ->(value) { Time.parse(value) }
-      when 'JSON', 'Hash'
+      when 'DateTime'
+        require 'date'
+        ->(value) { DateTime.parse(value) }
+      when 'JSON'
         ->(value) {
-          return value if value.is_a?(Hash)
+          parsed_value = convert_arg(value)
+          unless parsed_value.is_a?(Hash) || parsed_value.is_a?(Array)
+            parsed_value = JSON.parse(value)
+          end
+          unless parsed_value.is_a?(Hash) || parsed_value.is_a?(Array)
+            raise ::ArgumentError, 'JSON value must be an object or array'
+          end
 
-          JSON.parse(value)
+          parsed_value
+        }
+      when 'Hash'
+        ->(value) {
+          parsed_value = convert_arg(value)
+          parsed_value = JSON.parse(value) unless parsed_value.is_a?(Hash)
+          raise ::ArgumentError, 'Hash value must be an object' unless parsed_value.is_a?(Hash)
+
+          parsed_value
         }
       when 'Pathname'
         require 'pathname'
@@ -624,17 +739,27 @@ module Rubycli
         if normalized.start_with?('Array<') && normalized.end_with?('>')
           inner = normalized[6..-2].strip
           element_converter = converter_for_single_type(inner)
-          ->(value) { TypeUtils.parse_list(value).map { |item| element_converter ? element_converter.call(item) : item } }
+          ->(value) {
+            list_items(value).map { |item| element_converter ? element_converter.call(item) : item }
+          }
         elsif normalized.end_with?('[]')
           inner = normalized[0..-3]
           element_converter = converter_for_single_type(inner)
-          ->(value) { TypeUtils.parse_list(value).map { |item| element_converter ? element_converter.call(item) : item } }
+          ->(value) {
+            list_items(value).map { |item| element_converter ? element_converter.call(item) : item }
+          }
         elsif normalized == 'Array'
-          ->(value) { TypeUtils.parse_list(value) }
+          ->(value) { list_items(value) }
         else
           nil
         end
       end
+    end
+
+    def list_items(value)
+      converted_value = convert_arg(value)
+      source = converted_value.is_a?(Array) ? converted_value : value
+      TypeUtils.parse_list(source)
     end
 
     def convert_option_value(keyword, value, option_meta, type_converters)
@@ -646,17 +771,7 @@ module Rubycli
       converted_value = convert_arg(value)
       return converted_value unless converter
 
-      original_input = value if value.is_a?(String)
-      expects_list = option_meta && option_meta.types.any? { |type|
-        type.to_s.end_with?('[]') || type.to_s.start_with?('Array<')
-      }
-
-      value_for_converter = converted_value
-      if expects_list && original_input && converted_value.is_a?(Numeric) && original_input.include?(',')
-        value_for_converter = original_input
-      end
-
-      converter.call(value_for_converter)
+      converter.call(value)
     rescue StandardError => e
       option_label = option_meta&.long || option_meta&.short || keyword
       raise ArgumentError, "Value '#{value}' for option '#{option_label}' is invalid: #{e.message}"

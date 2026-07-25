@@ -40,6 +40,16 @@ module InlineDocSamples
   def search(query:); end
 end
 
+module TaggedOrderSamples
+  module_function
+
+  # @param second [Integer] Second value
+  # @param first [String] First value
+  def reorder(first, second)
+    [first, second]
+  end
+end
+
 class DocumentationRegistryTest < Minitest::Test
   def setup
     @environment = Rubycli::Environment.new(env: {}, argv: [])
@@ -120,6 +130,16 @@ class DocumentationRegistryTest < Minitest::Test
     assert verbose_opt.boolean_flag
     refute verbose_opt.requires_value
     assert_equal ['Boolean'], verbose_opt.types
+  end
+
+  def test_tagged_positionals_are_aligned_by_parameter_name
+    metadata = @registry.metadata_for(TaggedOrderSamples.method(:reorder))
+
+    assert_equal %i[first second], metadata[:positionals_map].keys
+    assert_equal ['String'], metadata[:positionals_map][:first].types
+    assert_equal 'First value', metadata[:positionals_map][:first].description
+    assert_equal ['Integer'], metadata[:positionals_map][:second].types
+    assert_equal 'Second value', metadata[:positionals_map][:second].description
   end
 
   def test_concise_format_includes_inline_annotations
