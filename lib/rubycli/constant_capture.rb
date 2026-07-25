@@ -20,10 +20,11 @@ module Rubycli
       previous_assignment_definitions = @assignment_definitions.fetch(normalized_file, {})
       current_assignment_definitions = assigned_constant_definitions(normalized_file)
       executed_lines = []
+      assignment_events = Hash.new { |hash, line| hash[line] = [] }
       observed_events = []
       @captured[normalized_file] = []
       before_snapshot = constant_snapshot(normalized_file)
-      trace = TracePoint.new(:class, :line, :c_return) do |tp|
+      trace = TracePoint.new(:class, :line, :c_call, :c_return) do |tp|
         location = tp.path
         next unless location && same_file?(normalized_file, location)
 
@@ -35,7 +36,7 @@ module Rubycli
     ensure
       trace&.disable
       if normalized_file && before_snapshot
-        apply_trace_events(observed_events, executed_lines, normalized_file)
+        apply_trace_events(observed_events, executed_lines, assignment_events, normalized_file)
         after_snapshot = constant_snapshot(normalized_file)
         changed_names = after_snapshot.keys.select do |name|
           before_snapshot[name] != after_snapshot[name]
@@ -46,7 +47,8 @@ module Rubycli
           definition_active = active_definition_retained?(
             previous_definitions,
             current_definitions,
-            executed_lines
+            executed_lines,
+            assignment_events
           )
           after_snapshot.key?(name) && (source_unchanged || definition_active)
         end
@@ -131,11 +133,15 @@ module Rubycli
       "#{owner_name}::#{constant_name}"
     end
 
-    def apply_trace_events(events, executed_lines, file)
+    def apply_trace_events(events, executed_lines, assignment_events, file)
       events.each do |event, target, line, method_id|
         case event
         when :line
           executed_lines << line
+        when :c_call
+          if method_id == :const_added || (method_id == :warn && target.equal?(Warning))
+            assignment_events[line] << method_id
+          end
         when :c_return
           @captured[file].concat(constants_set_at(target, file, line)) if method_id == :const_set
         when :class
@@ -160,12 +166,16 @@ module Rubycli
       end
     end
 
-    def active_definition_retained?(previous_definitions, current_definitions, executed_lines)
+    def active_definition_retained?(previous_definitions, current_definitions, executed_lines, assignment_events)
       previous_definitions.any? do |previous|
         current_definitions.any? do |current|
           next false unless previous[:signature] == current[:signature]
 
-          !current[:ambiguous_line] && executed_lines.include?(current[:line])
+          events = assignment_events[current[:line]]
+          assignment_observed = events.include?(:const_added) || events.count(:warn) >= 2
+          current[:persistent] ||
+            assignment_observed ||
+            (!current[:ambiguous_line] && executed_lines.include?(current[:line]))
         end
       end
     end
@@ -197,6 +207,11 @@ module Rubycli
         signature = [node.first, nil, contexts.map(&:first)]
         collect_assignment_targets(node[1], namespace, definitions, signature, contexts)
         node.drop(2).each do |child|
+          collect_assigned_constant_definitions(child, namespace, contexts, definitions)
+        end
+      when :method_add_arg, :command_call, :command
+        collect_const_set_definition(node, namespace, contexts, definitions)
+        node.each do |child|
           collect_assigned_constant_definitions(child, namespace, contexts, definitions)
         end
       when :if, :unless
@@ -258,7 +273,7 @@ module Rubycli
         line = source_line(node)
         # A line event can precede a skipped postfix/short-circuit assignment.
         ambiguous_line = contexts.any? { |context| context[1] == line }
-        definition = { signature: signature, line: line, ambiguous_line: ambiguous_line }
+        definition = { signature: signature, line: line, ambiguous_line: ambiguous_line, persistent: false }
         definitions[assigned_name] = Array(definitions[assigned_name]) | [definition]
       elsif node.is_a?(Array)
         node.each { |child| collect_assignment_targets(child, namespace, definitions, signature, contexts) }
@@ -267,6 +282,88 @@ module Rubycli
 
     def assignment_operator(node)
       node.first == :opassign ? node.dig(2, 1) : nil
+    end
+
+    def collect_const_set_definition(node, namespace, contexts, definitions)
+      receiver, method_name, arguments = call_parts(node)
+      return unless method_name == 'const_set'
+
+      constant_name = literal_constant_name(arguments.first)
+      return unless constant_name
+
+      owner_name = if receiver.nil?
+                     namespace.join('::')
+                   elsif object_receiver?(receiver)
+                     ''
+                   else
+                     constant_name_from_node(receiver, namespace)
+                   end
+      return if owner_name.nil?
+
+      assigned_name = [owner_name, constant_name].reject(&:empty?).join('::')
+      signature = [:const_set, nil, contexts.map(&:first)]
+      line = source_line(node)
+      definition = {
+        signature: signature,
+        line: line,
+        ambiguous_line: false,
+        persistent: contexts.empty? || const_defined_guard?(contexts, assigned_name)
+      }
+      definitions[assigned_name] = Array(definitions[assigned_name]) | [definition]
+    end
+
+    def call_parts(node)
+      case node.first
+      when :method_add_arg
+        call = node[1]
+        receiver = call[1] if call&.first == :call
+        method_token = call&.first == :call ? call[3] : call&.[](1)
+        [receiver, method_token&.[](1), call_arguments(node[2])]
+      when :command_call
+        [node[1], node.dig(3, 1), call_arguments(node[4])]
+      when :command
+        [nil, node.dig(1, 1), call_arguments(node[2])]
+      end
+    end
+
+    def call_arguments(node)
+      return [] unless node.is_a?(Array)
+      return call_arguments(node[1]) if node.first == :arg_paren
+      return Array(node[1]) if node.first == :args_add_block
+
+      []
+    end
+
+    def literal_constant_name(node)
+      return nil unless node.is_a?(Array)
+      return nil unless %i[symbol_literal string_literal].include?(node.first)
+
+      token = find_syntax_token(node) { |type, _value| %i[@const @ident @tstring_content].include?(type) }
+      token&.[](1)
+    end
+
+    def object_receiver?(node)
+      node&.first == :var_ref && node.dig(1, 0) == :@const && node.dig(1, 1) == 'Object'
+    end
+
+    def const_defined_guard?(contexts, assigned_name)
+      constant_name = assigned_name.split('::').last
+      contexts.any? do |context, _line|
+        has_method = find_syntax_token(context) { |_type, value| value == 'const_defined?' }
+        has_constant = find_syntax_token(context) { |_type, value| value == constant_name }
+        has_method && has_constant
+      end
+    end
+
+    def find_syntax_token(node, &predicate)
+      return nil unless node.is_a?(Array)
+      return node if node.first.to_s.start_with?('@') && predicate.call(node[0], node[1])
+
+      node.each do |child|
+        token = find_syntax_token(child, &predicate)
+        return token if token
+      end
+      nil
     end
 
     def canonical_syntax(node)

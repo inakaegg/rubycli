@@ -392,6 +392,33 @@ class ConstantCaptureTest < Minitest::Test
     end
   end
 
+  def test_retains_alias_when_edited_postfix_assignment_executes
+    capture = Rubycli::ConstantCapture.new
+    Tempfile.create(['postfix_executed_edited_alias', '.rb']) do |file|
+      source = <<~RUBY
+        module CapturePostfixExecutedAliasSource
+          def self.run; end
+        end
+        CapturePostfixExecutedAssignedAlias = CapturePostfixExecutedAliasSource if true
+      RUBY
+      file.write(source)
+      file.flush
+
+      capture_io { capture.capture(file.path) { load file.path } }
+      file.rewind
+      file.truncate(0)
+      file.write("#{source}\n# harmless edit\n")
+      file.flush
+
+      capture_io { capture.capture(file.path) { load file.path } }
+
+      assert_includes capture.constants_for(file.path), 'CapturePostfixExecutedAssignedAlias'
+    ensure
+      cleanup_constant(:CapturePostfixExecutedAssignedAlias)
+      cleanup_constant(:CapturePostfixExecutedAliasSource)
+    end
+  end
+
   def test_records_const_set_alias_after_source_file_is_edited
     capture = Rubycli::ConstantCapture.new
     Tempfile.create(['edited_const_set_alias', '.rb']) do |file|
@@ -416,6 +443,35 @@ class ConstantCaptureTest < Minitest::Test
     ensure
       cleanup_constant(:CaptureConstSetAssignedAlias)
       cleanup_constant(:CaptureConstSetAliasSource)
+    end
+  end
+
+  def test_retains_guarded_const_set_alias_after_source_file_is_edited
+    capture = Rubycli::ConstantCapture.new
+    Tempfile.create(['edited_guarded_const_set_alias', '.rb']) do |file|
+      source = <<~RUBY
+        module CaptureGuardedConstSetAliasSource
+          def self.run; end
+        end
+        unless Object.const_defined?(:CaptureGuardedConstSetAssignedAlias, false)
+          Object.const_set(:CaptureGuardedConstSetAssignedAlias, CaptureGuardedConstSetAliasSource)
+        end
+      RUBY
+      file.write(source)
+      file.flush
+
+      capture_io { capture.capture(file.path) { load file.path } }
+      file.rewind
+      file.truncate(0)
+      file.write("#{source}\n# harmless edit\n")
+      file.flush
+
+      capture_io { capture.capture(file.path) { load file.path } }
+
+      assert_includes capture.constants_for(file.path), 'CaptureGuardedConstSetAssignedAlias'
+    ensure
+      cleanup_constant(:CaptureGuardedConstSetAssignedAlias)
+      cleanup_constant(:CaptureGuardedConstSetAliasSource)
     end
   end
 

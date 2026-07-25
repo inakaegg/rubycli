@@ -23,7 +23,7 @@
 - YARD positional tags are aligned by parameter name instead of comment order.
 - Eval-mode local variables and command-line strict/check/result-output flags no longer leak across separate programmatic runs.
 - Constructor and command eval arguments share one binding per Runner execution without enabling eval mode while the target file loads.
-- Required options accept a lone `-` value, bare rest placeholders render with an ellipsis, and quoted `String[]` elements remain strings.
+- Required options accept a lone `-` value, bare rest placeholders render with an ellipsis, and quoted positional/option `String[]` elements remain strings.
 - Invalid Ruby syntax passed through strict eval mode now produces a user-facing Rubycli argument error instead of leaking a `SyntaxError` backtrace.
 - Circular arrays/hashes returned by commands now fall back to inspected output instead of raising a JSON nesting error.
 

@@ -125,6 +125,16 @@ module ScalarTypeSamples
     codes
   end
 
+  # ITEMS [String[]] Positional string codes
+  def positional_string_list(items)
+    items
+  end
+
+  # ITEMS [Array<String>] Generic positional string codes
+  def generic_positional_string_list(items)
+    items
+  end
+
   # --flags VALUES... [Boolean] Boolean flags
   def boolean_list(flags:)
     flags
@@ -505,6 +515,28 @@ class ArgumentParserTest < Minitest::Test
 
     assert_empty pos_args
     assert_equal({ codes: %w[true null] }, kw_args)
+    @environment.enable_strict_input!
+    assert_silent { @parser.validate_inputs(method, pos_args, kw_args) }
+  end
+
+  def test_positional_string_array_preserves_quoted_boolean_and_null_tokens
+    method = ScalarTypeSamples.method(:positional_string_list)
+
+    pos_args, kw_args = @parser.parse(['["true","null"]'], method)
+
+    assert_equal [%w[true null]], pos_args
+    assert_empty kw_args
+    @environment.enable_strict_input!
+    assert_silent { @parser.validate_inputs(method, pos_args, kw_args) }
+  end
+
+  def test_generic_positional_string_array_preserves_quoted_boolean_and_null_tokens
+    method = ScalarTypeSamples.method(:generic_positional_string_list)
+
+    pos_args, kw_args = @parser.parse(['["true","null"]'], method)
+
+    assert_equal [%w[true null]], pos_args
+    assert_empty kw_args
     @environment.enable_strict_input!
     assert_silent { @parser.validate_inputs(method, pos_args, kw_args) }
   end
