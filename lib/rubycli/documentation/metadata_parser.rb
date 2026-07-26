@@ -32,6 +32,7 @@ module Rubycli
         summary_display_lines = []
         detail_lines = []
         summary_phase = true
+        deferred_positional = nil
 
         comment_lines.each do |content|
           stripped = content.strip
@@ -69,7 +70,14 @@ module Rubycli
           end
 
           if (positional = parse_positional_line(stripped, method_obj))
-            metadata[:positionals] << positional
+            # An untyped uppercase line opening a doc block ("JSON output
+            # formatter for reports.") reads exactly like a placeholder. Hold on
+            # to it and decide once the whole block is known.
+            if summary_phase && deferred_positional.nil? && !positional.inline_type_annotation
+              deferred_positional = { content: content, stripped: stripped, definition: positional }
+            else
+              metadata[:positionals] << positional
+            end
             summary_phase = false
             next
           end
@@ -78,6 +86,15 @@ module Rubycli
             summary_compact_lines << stripped unless stripped.empty?
           else
             detail_lines << content.rstrip
+          end
+        end
+
+        if deferred_positional
+          if positional_documentation_needed?(method_obj, metadata[:positionals].size)
+            metadata[:positionals].unshift(deferred_positional[:definition])
+          else
+            summary_display_lines << deferred_positional[:content].rstrip
+            summary_compact_lines << deferred_positional[:stripped]
           end
         end
 
@@ -91,6 +108,15 @@ module Rubycli
         align_and_validate_parameter_docs(method_obj, metadata, defaults)
 
         metadata
+      end
+
+      # True while the documented placeholders do not yet cover every positional
+      # parameter, which is what tells a real placeholder line from prose.
+      def positional_documentation_needed?(method_obj, documented_count)
+        return true unless method_obj.respond_to?(:parameters)
+
+        positional_count = method_obj.parameters.count { |type, _| %i[req opt rest].include?(type) }
+        documented_count < positional_count
       end
 
       def trim_blank_edges(lines)

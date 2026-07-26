@@ -79,12 +79,39 @@ module ArticleSummarySamples
   def typed(value)
     value
   end
+
+  # JSON output formatter for reports.
+  # NAME [String] Name to render
+  def json_summary(name)
+    name
+  end
+
+  # NAME Name to greet
+  def bare_placeholder(name)
+    name
+  end
 end
 
 class DocumentationRegistryTest < Minitest::Test
   def setup
     @environment = Rubycli::Environment.new(env: {}, argv: [])
     @registry = Rubycli::DocumentationRegistry.new(environment: @environment)
+  end
+
+  def test_uppercase_prose_summary_is_kept_out_of_the_positional_table
+    metadata = @registry.metadata_for(ArticleSummarySamples.method(:json_summary))
+
+    assert_equal 'JSON output formatter for reports.', metadata[:summary]
+    assert_equal ['NAME'], metadata[:positionals].map(&:label)
+    assert_equal 'Name to render', metadata[:positionals].first.description
+  end
+
+  def test_untyped_placeholder_remains_a_placeholder_when_the_argument_needs_it
+    metadata = @registry.metadata_for(ArticleSummarySamples.method(:bare_placeholder))
+
+    assert_nil metadata[:summary]
+    assert_equal ['NAME'], metadata[:positionals].map(&:label)
+    assert_equal 'Name to greet', metadata[:positionals].first.description
   end
 
   def test_summary_starting_with_an_article_is_not_parsed_as_a_placeholder
