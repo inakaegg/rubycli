@@ -1,6 +1,9 @@
 # Changelog
 
-## [Unreleased]
+## [0.2.0] - 2026-07-26
+
+Final release. Rubycli is no longer maintained; see the project status
+section in the README.
 
 ### Added
 - Gemfile, Rakefile, and gemspec development dependencies, so a fresh clone runs `bundle install && bundle exec rake` (test suite plus RuboCop).
@@ -77,7 +80,7 @@
 ## [0.1.7] - 2025-11-12
 
 ### Added
-- `--new` now optionally accepts a constructor argument inline (e.g., `--new=[...]`); YAML/JSON-like literals are safely parsed, and `--json-args` / `--eval-args` / `--eval-lax` still apply. The value is bound to the constructor's first parameter, so `--new='["a","b"]'` passes that array as a single argument (corrected in [Unreleased]: the original note claimed arrays and hashes expand into positional and keyword arguments).
+- `--new` now optionally accepts a constructor argument inline (e.g., `--new=[...]`); YAML/JSON-like literals are safely parsed, and `--json-args` / `--eval-args` / `--eval-lax` still apply. The value is bound to the constructor's first parameter, so `--new='["a","b"]'` passes that array as a single argument (corrected in 0.2.0: the original note claimed arrays and hashes expand into positional and keyword arguments).
 - Positional argument coercion now runs through the same type-conversion pipeline as options/`--new`, including comment-driven array/element coercion and strict-mode validation; new tests cover arrays, hashes, booleans, and `--new` with JSON/eval modes.
 - Added `examples/new_mode_runner.rb` to showcase `--new` with constructor args, eval/JSON modes, and pre-script initialization for instance-only classes.
 - Strengthened tests for `--eval-lax` success/fallback with `--new` and end-to-end positional Hash coercion to guard against regressions.

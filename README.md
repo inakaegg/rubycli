@@ -19,6 +19,18 @@ conventions and type annotations.
 
 ![Rubycli demo showing generated commands and invocation](https://raw.githubusercontent.com/inakaegg/rubycli/main/assets/rubycli-demo.gif)
 
+## Project status
+
+Rubycli is **no longer maintained.** 0.2.0 is the final release and closes the
+project out with the fixes from a full behavioural audit of the released gem
+(eight reproducible defects; see [CHANGELOG.md](CHANGELOG.md)). Issues and pull
+requests are not reviewed, and no further releases are planned.
+
+The code stays online as a reference. If you are picking a CLI library for
+production work, use [Thor](https://github.com/rails/thor),
+[dry-cli](https://dry-rb.org/gems/dry-cli/), or Ruby's built-in
+`OptionParser`.
+
 ## Installation
 
 ```bash
@@ -126,8 +138,8 @@ still called `HelloApp`, so the file adds `HelloAppWithDocs = HelloApp` at the
 bottom to keep a constant that matches the file name; that is why it runs
 without extra flags. When a file has no matching constant, see
 [Target constant resolution](#target-constant-resolution) below.
-(Rubycli 0.1.7 does not detect that alias yet, so add `--auto-target` / `-a` if
-you are still on the released gem.)
+(Rubycli 0.1.7 and earlier do not detect that alias, so add `--auto-target` /
+`-a` on those versions.)
 
 ```bash
 rubycli examples/hello_app_with_docs.rb greet --help
@@ -591,9 +603,9 @@ rubycli --pre-script 'NewModeRunner.new(%w[a b c], options: {from: :pre})' \
 - **Method definitions first, comments augment** — signatures determine what is
   exposed and what is required; comments refine types, help text, and
   validation.
-- **Lightweight maintenance** — much of the implementation was generated with
-  AI assistance; contributions that dive into deep Ruby metaprogramming are out
-  of scope. Please discuss expectations before opening parity PRs.
+- **Maintenance** — much of the implementation was generated with AI
+  assistance. The project is no longer maintained; see
+  [Project status](#project-status).
 
 ## Bundled examples
 

@@ -17,6 +17,17 @@ Rubycli は、既存の Ruby クラス／モジュールをそのままコマン
 
 ![Rubycli のデモ（コマンド生成と実行の様子）](https://raw.githubusercontent.com/inakaegg/rubycli/main/assets/rubycli-demo.gif)
 
+## プロジェクトの状態
+
+Rubycli は**メンテナンスを終了しました。** 0.2.0 が最終リリースで、公開済み gem の挙動を
+全面監査して見つかった 8 件の不具合を修正し、区切りとしています
+（[CHANGELOG.md](CHANGELOG.md) 参照）。Issue・Pull Request の対応は行わず、
+今後のリリース予定もありません。
+
+コードは参考のため公開したまま残しています。実務で CLI ライブラリを選ぶのであれば、
+[Thor](https://github.com/rails/thor)、[dry-cli](https://dry-rb.org/gems/dry-cli/)、
+または Ruby 標準の `OptionParser` をご利用ください。
+
 ## インストール
 
 ```bash
@@ -123,7 +134,7 @@ end
 `HelloAppWithDocs = HelloApp` を置いてファイル名と一致する定数を用意しています。
 そのため追加のフラグなしで実行できます。一致する定数がないファイルの扱いは
 後述の[対象定数の解決](#対象定数の解決)を参照してください。
-（この別名の検出は Rubycli 0.1.7 では未対応です。公開済みの 0.1.7 を使っている場合は
+（この別名の検出は Rubycli 0.1.7 以前では未対応です。それらのバージョンでは
 `--auto-target` / `-a` を付けてください。）
 
 ```bash
@@ -558,8 +569,8 @@ rubycli --pre-script 'NewModeRunner.new(%w[a b c], options: {from: :pre})' \
   Python Fire との機能一致は目標ではなく、Fire 由来の未実装機能は基本的に仕様です。
 - **メソッド定義が土台、コメントが補強** — 公開範囲と必須／任意はシグネチャが決め、
   コメントは型・ヘルプ・検証を補強します。
-- **軽量メンテナンス** — 実装の多くは AI 支援で作られており、深い Ruby メタプログラミングに
-  踏み込む拡張は想定外です。互換性追求の PR は事前にご相談ください。
+- **メンテナンス** — 実装の多くは AI 支援で作られています。現在はメンテナンスを終了して
+  います（[プロジェクトの状態](#プロジェクトの状態)を参照）。
 
 ## 同梱サンプル
 
