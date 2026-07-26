@@ -145,6 +145,10 @@ rubycli examples/hello_app_with_docs.rb greet --shout Hanako
 #=> HELLO, HANAKO!
 ```
 
+CLI コマンドになるのは、対象のクラス／モジュール自身に定義された public メソッドだけです。
+親クラスから継承したメソッド、`include` で取り込んだメソッド、`attr_accessor` が生成する
+メソッドは公開されないため、CLI から呼びたい場合は対象側にラッパーを定義してください。
+
 CLI に公開したくないヘルパーは、特異クラス側で `private` として定義します。
 
 ```ruby

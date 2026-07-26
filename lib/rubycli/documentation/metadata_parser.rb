@@ -341,6 +341,12 @@ module Rubycli
         type_token = nil
         type_token = tokens.shift if tokens.first && type_token_candidate?(tokens.first)
 
+        # Summaries such as "A command that ..." or "I keep ..." start with an
+        # all-uppercase single letter and would otherwise take over the first
+        # positional argument. Require a type annotation to use one as a
+        # placeholder; "A [String] ..." keeps working.
+        return nil if type_token.nil? && clean_placeholder.match?(/\A[A-Z]\z/)
+
         description = tokens.join(' ').strip
         description = nil if description.empty?
 

@@ -60,10 +60,54 @@ module ReturnShorthandDocSamples
   end
 end
 
+module ArticleSummarySamples
+  module_function
+
+  # A command that greets the given person.
+  # NAME [String] Name to greet
+  def greet(name)
+    name
+  end
+
+  # I keep a counter for you.
+  # COUNT [Integer] How many times
+  def count(count)
+    count
+  end
+
+  # A [String] Single letter placeholder with a type
+  def typed(value)
+    value
+  end
+end
+
 class DocumentationRegistryTest < Minitest::Test
   def setup
     @environment = Rubycli::Environment.new(env: {}, argv: [])
     @registry = Rubycli::DocumentationRegistry.new(environment: @environment)
+  end
+
+  def test_summary_starting_with_an_article_is_not_parsed_as_a_placeholder
+    metadata = @registry.metadata_for(ArticleSummarySamples.method(:greet))
+
+    assert_equal 'A command that greets the given person.', metadata[:summary]
+    assert_equal ['NAME'], metadata[:positionals].map(&:label)
+    assert_equal 'Name to greet', metadata[:positionals].first.description
+  end
+
+  def test_summary_starting_with_a_pronoun_is_not_parsed_as_a_placeholder
+    metadata = @registry.metadata_for(ArticleSummarySamples.method(:count))
+
+    assert_equal 'I keep a counter for you.', metadata[:summary]
+    assert_equal ['COUNT'], metadata[:positionals].map(&:label)
+  end
+
+  def test_single_letter_placeholder_with_a_type_annotation_still_parses
+    metadata = @registry.metadata_for(ArticleSummarySamples.method(:typed))
+
+    assert_equal ['A'], metadata[:positionals].map(&:label)
+    assert_equal ['String'], metadata[:positionals].first.types
+    assert_nil metadata[:summary]
   end
 
   def test_tagged_param_metadata_parses_options_and_positionals

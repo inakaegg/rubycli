@@ -236,6 +236,22 @@ class CLITest < Minitest::Test
     assert_equal ['run'], @cli.available_commands(klass.new)
   end
 
+  def test_inherited_and_included_methods_are_not_exposed_as_commands
+    mixin = Module.new do
+      def included_command; end
+    end
+    base = Class.new do
+      def base_command; end
+    end
+    klass = Class.new(base) do
+      include mixin
+
+      def own_command; end
+    end
+
+    assert_equal ['own_command'], @cli.available_commands(klass.new)
+  end
+
   def test_usage_and_description_delegate_to_documented_method_renderer
     method_obj = ChoiceDocSamples.method(:report)
 
