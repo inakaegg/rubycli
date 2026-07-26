@@ -292,11 +292,14 @@ module Rubycli
       pre_scripts: [],
       constant_mode: nil
     )
+      # A pre-script builds the object that will be exposed, so instance methods
+      # count as commands even without --new; otherwise an instance-only class
+      # would be rejected before the pre-script had a chance to instantiate it.
       target, full_path = resolve_runner_target(
         target_path,
         class_name,
         constant_mode: constant_mode,
-        instantiate: new
+        instantiate: new || !Array(pre_scripts).empty?
       )
 
       initializer_args = if new

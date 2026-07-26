@@ -250,6 +250,8 @@ no CLI-callable methods.
   than one argument or keyword arguments.
 - Prefer the `--new=VALUE` form over a space-separated `--new VALUE`, so the
   value is not mistaken for the file path.
+- A `--pre-script` that returns an instance exposes instance methods on its own,
+  so it can be used instead of `--new`, not only alongside it.
 
 Example (`examples/new_mode_runner.rb`):
 
@@ -529,8 +531,7 @@ previous object). `SRC` can be inline Ruby or a file path.
 Example — replace the `--new`-built instance with a hand-built one:
 
 ```bash
-rubycli --new='["a"]' \
-  --pre-script 'NewModeRunner.new(%w[a b c], options: {from: :pre})' \
+rubycli --pre-script 'NewModeRunner.new(%w[a b c], options: {from: :pre})' \
   examples/new_mode_runner.rb run --mode summary
 ```
 

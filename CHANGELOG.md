@@ -59,6 +59,7 @@
 - Negative numbers are treated as values instead of options, so `greet -5` and rest parameters such as `collect -5 -1_000 -0x10` no longer swallow the following argument or turn it into a keyword.
 - Type annotations naming a class from an uninstalled library (`BigDecimal` without the bigdecimal gem, which stopped being a default gem in Ruby 3.4) report an installation hint instead of leaking a `LoadError` backtrace.
 - Target files that exist but cannot be read report `File is not readable:` instead of an `Errno::EACCES` backtrace.
+- `--pre-script` / `--init` can expose a class that only defines instance methods without also passing `--new`; the target used to be rejected before the pre-script ran, so the documented "build/replace the exposed object" behaviour needed a throwaway `--new` value.
 - Commands returning an Enumerable whose elements are not pairs (`Set`, `Range`, `Enumerator`) print their inspected form instead of raising `TypeError` from the duck-typed `to_h` conversion.
 - A constant that exists but exposes no callable command no longer reports `Could not find definition:` while listing that same constant as found; the message now says it cannot be used as a CLI target and keeps the `--new` hint.
 

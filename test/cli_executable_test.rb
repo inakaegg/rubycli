@@ -68,6 +68,17 @@ class CLIExecutableTest < Minitest::Test
     assert_equal %w[c b a], JSON.parse(out)
   end
 
+  def test_pre_script_alone_can_expose_an_instance_only_class
+    out, err, status = run_cli(
+      '--pre-script', 'NewModeRunner.new(%w[a b])',
+      'examples/new_mode_runner.rb', 'run', '--mode', 'reverse'
+    )
+
+    assert_equal 0, status
+    assert_empty err
+    assert_equal %w[b a], JSON.parse(out)
+  end
+
   def test_check_succeeds_for_documented_example
     out, _err, status = run_cli('--check', 'examples/hello_app.rb')
 

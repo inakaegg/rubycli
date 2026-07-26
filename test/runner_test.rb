@@ -210,6 +210,38 @@ class RunnerTest < Minitest::Test
     end
   end
 
+  def test_pre_script_builds_an_instance_only_target_without_new
+    Dir.mktmpdir do |dir|
+      file = File.join(dir, 'pre_script_runner.rb')
+      File.write(file, <<~'RUBY')
+        class PreScriptRunner
+          def initialize(name)
+            @name = name
+          end
+
+          def greet
+            "hi #{@name}"
+          end
+        end
+      RUBY
+
+      captured = nil
+      Rubycli.cli.stub(:run, ->(target, *_args) { captured = target }) do
+        Rubycli::Runner.execute(
+          file,
+          nil,
+          ['greet'],
+          pre_scripts: [{ value: 'PreScriptRunner.new("ruby")', context: '(inline --pre-script)' }]
+        )
+      end
+
+      assert_instance_of PreScriptRunner, captured
+      assert_equal 'hi ruby', captured.greet
+    ensure
+      Object.send(:remove_const, :PreScriptRunner) if Object.const_defined?(:PreScriptRunner)
+    end
+  end
+
   def test_apply_pre_scripts_transforms_target
     target = Class.new do
       def call

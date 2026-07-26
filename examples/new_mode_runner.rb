@@ -40,7 +40,7 @@ end
 #   # Eval mode: Ruby literals are accepted, but every argument must be valid Ruby
 #   rubycli --eval-args --new='%w[x y]' examples/new_mode_runner.rb run --mode ':reverse'
 #
-#   # --new passes a single value (items), so keyword arguments go through a pre-script
-#   rubycli --new='["a"]' \
-#     --pre-script 'NewModeRunner.new(%w[a b c], options: {from: :pre})' \
+#   # --new passes a single value (items), so keyword arguments go through a pre-script,
+#   # which builds the instance on its own and needs no --new
+#   rubycli --pre-script 'NewModeRunner.new(%w[a b c], options: {from: :pre})' \
 #     examples/new_mode_runner.rb run --mode summary

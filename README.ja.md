@@ -241,6 +241,8 @@ CLI から呼び出せません（Rubycli から見えるコマンドが 1 つ�
   キーワード引数を渡したい場合は `--pre-script` を使ってください。
 - スペース区切りの `--new VALUE` は値がファイルパスと誤認されやすいため、
   `--new=VALUE` の形を推奨します。
+- インスタンスを返す `--pre-script` はそれ自体でインスタンスメソッドを公開できるため、
+  `--new` と併用しなくても単独で使えます。
 
 実行例（`examples/new_mode_runner.rb`）:
 
@@ -500,8 +502,7 @@ rubycli -E examples/hello_app.rb greet https://example.com
 実行例 — `--new` で作られるインスタンスを、自分で組み立てたものに差し替える:
 
 ```bash
-rubycli --new='["a"]' \
-  --pre-script 'NewModeRunner.new(%w[a b c], options: {from: :pre})' \
+rubycli --pre-script 'NewModeRunner.new(%w[a b c], options: {from: :pre})' \
   examples/new_mode_runner.rb run --mode summary
 ```
 
