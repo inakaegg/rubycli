@@ -24,6 +24,31 @@ class CommandLineTest < Minitest::Test
     assert_includes err, 'Arguments are parsed as safe literals by default'
   end
 
+  def test_run_returns_the_command_status_without_terminating_the_process
+    target = File.expand_path('../examples/hello_app.rb', __dir__)
+    status = nil
+
+    out, _err = capture_io do
+      status = Rubycli::CommandLine.run([target, 'greet', 'Ruby'])
+    end
+
+    assert_equal 0, status
+    assert_includes out, 'Hello, Ruby!'
+  end
+
+  def test_run_returns_a_failure_status_when_the_command_is_missing
+    target = File.expand_path('../examples/hello_app.rb', __dir__)
+    status = nil
+
+    out, err = capture_io do
+      status = Rubycli::CommandLine.run([target, 'nope'])
+    end
+
+    assert_equal 1, status
+    assert_empty out
+    assert_includes err, "Command 'nope' is not available."
+  end
+
   def test_parses_flags_and_invokes_runner_with_options
     argv = [
       '--new=["alpha"]',

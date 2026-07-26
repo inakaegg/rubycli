@@ -108,7 +108,7 @@ class RunnerTest < Minitest::Test
       original_argv = ARGV.dup
       program_before = $PROGRAM_NAME
 
-      Rubycli.stub(:run, ->(target, *_args) { captured_target = target }) do
+      Rubycli.cli.stub(:run, ->(target, *_args) { captured_target = target }) do
         Rubycli::Runner.execute(file, nil, ['hello'], new: true)
       end
 
@@ -140,7 +140,7 @@ class RunnerTest < Minitest::Test
       RUBY
 
       kw_instance = nil
-      Rubycli.stub(:run, ->(target, *_args) { kw_instance = target }) do
+      Rubycli.cli.stub(:run, ->(target, *_args) { kw_instance = target }) do
         Rubycli::Runner.execute(file, nil, ['run'], new: true, new_args: '[1,2]')
       end
 
@@ -150,7 +150,7 @@ class RunnerTest < Minitest::Test
       assert_equal({}, kw_instance.kwargs)
 
       pos_instance = nil
-      Rubycli.stub(:run, ->(target, *_args) { pos_instance = target }) do
+      Rubycli.cli.stub(:run, ->(target, *_args) { pos_instance = target }) do
         Rubycli::Runner.execute(file, nil, ['run'], new: true, new_args: '["alpha", 2]')
       end
 
@@ -200,7 +200,7 @@ class RunnerTest < Minitest::Test
       RUBY
 
       captured_target = nil
-      Rubycli.stub(:run, ->(target, *_args) { captured_target = target }) do
+      Rubycli.cli.stub(:run, ->(target, *_args) { captured_target = target }) do
         Rubycli::Runner.execute(file, nil, [], constant_mode: :auto)
       end
 
@@ -336,7 +336,7 @@ class RunnerTest < Minitest::Test
       assert_match('--new', error.message)
 
       captured = nil
-      Rubycli.stub(:run, ->(target, *_args) { captured = target }) do
+      Rubycli.cli.stub(:run, ->(target, *_args) { captured = target }) do
         Rubycli::Runner.execute(file, nil, ['greet'], constant_mode: :strict, new: true)
       end
       assert_instance_of InstanceRunner, captured
@@ -366,7 +366,7 @@ class RunnerTest < Minitest::Test
       RUBY
 
       captured = nil
-      Rubycli.stub(:run, ->(target, *_args) { captured = target }) do
+      Rubycli.cli.stub(:run, ->(target, *_args) { captured = target }) do
         Rubycli::Runner.execute(file, nil, ['run'], new: true, new_args: 'foo,bar', constant_mode: :strict)
       end
 
@@ -390,7 +390,7 @@ class RunnerTest < Minitest::Test
         end
       RUBY
 
-      Rubycli.stub(:run, ->(target, *_args, **_kw) { target }) do
+      Rubycli.cli.stub(:run, ->(target, *_args, **_kw) { target }) do
         Rubycli::Runner.execute(file, nil, ['sum', '1,2,3'], constant_mode: :strict)
       end
     ensure
@@ -412,14 +412,11 @@ class RunnerTest < Minitest::Test
       RUBY
 
       parsed = nil
-      run_without_exit = ->(target, *_args) { Rubycli.cli.run(target, ARGV.dup, false) }
-      Rubycli.stub(:run, run_without_exit) do
-        Rubycli.stub(:call_target, lambda { |_method, pos_args, kw_args|
-          parsed = { pos: pos_args, kw: kw_args }
-          nil
-        }) do
-          Rubycli::Runner.execute(file, nil, ['combine', '{"foo":1}', 'true'], constant_mode: :strict, eval_args: false, json: true, new: false)
-        end
+      Rubycli.stub(:call_target, lambda { |_method, pos_args, kw_args|
+        parsed = { pos: pos_args, kw: kw_args }
+        nil
+      }) do
+        Rubycli::Runner.execute(file, nil, ['combine', '{"foo":1}', 'true'], constant_mode: :strict, eval_args: false, json: true, new: false)
       end
       assert_equal([{ 'foo' => 1 }, true], parsed[:pos])
       assert_equal({}, parsed[:kw])
@@ -429,17 +426,15 @@ class RunnerTest < Minitest::Test
         Rubycli.environment.enable_strict_input!
         status = nil
         _out, err = capture_io do
-          Rubycli.stub(:run, run_without_exit) do
-            status = Rubycli::Runner.execute(
-              file,
-              nil,
-              ['combine', '"not-a-hash"', '"maybe"'],
-              constant_mode: :strict,
-              eval_args: false,
-              json: true,
-              new: false
-            )
-          end
+          status = Rubycli::Runner.execute(
+            file,
+            nil,
+            ['combine', '"not-a-hash"', '"maybe"'],
+            constant_mode: :strict,
+            eval_args: false,
+            json: true,
+            new: false
+          )
         end
         assert_equal 1, status
         assert_includes err, 'CONFIG must be Hash'
@@ -470,14 +465,14 @@ class RunnerTest < Minitest::Test
       RUBY
 
       captured = nil
-      Rubycli.stub(:run, ->(target, *_args) { captured = target }) do
+      Rubycli.cli.stub(:run, ->(target, *_args) { captured = target }) do
         Rubycli::Runner.execute(file, nil, ['run'], new: true, new_args: '{"a":1}', eval_args: false, json: true, constant_mode: :strict)
       end
       assert_instance_of InitHashRunner, captured
       assert_equal({ 'a' => 1 }, captured.opts)
 
       captured = nil
-      Rubycli.stub(:run, ->(target, *_args) { captured = target }) do
+      Rubycli.cli.stub(:run, ->(target, *_args) { captured = target }) do
         Rubycli::Runner.execute(file, nil, ['run'], new: true, new_args: '{"b":2}', eval_args: true, constant_mode: :strict)
       end
       assert_equal({ b: 2 }, captured.opts)
@@ -488,13 +483,13 @@ class RunnerTest < Minitest::Test
       assert_includes error.message, 'Failed to parse --new arguments'
 
       captured = nil
-      Rubycli.stub(:run, ->(target, *_args) { captured = target }) do
+      Rubycli.cli.stub(:run, ->(target, *_args) { captured = target }) do
         Rubycli::Runner.execute(file, nil, ['run'], new: true, new_args: '{retry: 2}', eval_args: true, eval_lax: true, json: false, constant_mode: :strict)
       end
       assert_equal({ retry: 2 }, captured.opts)
 
       captured = nil
-      Rubycli.stub(:run, ->(target, *_args) { captured = target }) do
+      Rubycli.cli.stub(:run, ->(target, *_args) { captured = target }) do
         Rubycli::Runner.execute(
           file,
           nil,
@@ -510,7 +505,7 @@ class RunnerTest < Minitest::Test
       assert_equal({ retry: 3 }, captured.opts)
 
       captured = nil
-      Rubycli.stub(:run, ->(target, *_args) { captured = target }) do
+      Rubycli.cli.stub(:run, ->(target, *_args) { captured = target }) do
         _out, err = capture_io do
           Rubycli::Runner.execute(file, nil, ['run'], new: true, new_args: 'not{json', eval_args: true, eval_lax: true, json: false, constant_mode: :strict)
         end
@@ -536,22 +531,19 @@ class RunnerTest < Minitest::Test
       RUBY
 
       captured = nil
-      run_without_exit = ->(target, *_args) { Rubycli.cli.run(target, ARGV.dup, false) }
-      Rubycli.stub(:run, run_without_exit) do
-        Rubycli.stub(:call_target, lambda { |_method, pos_args, _kw_args|
-          captured = pos_args.first
-          nil
-        }) do
-          Rubycli::Runner.execute(
-            file,
-            nil,
-            ['run', '[:foo, :bar]'],
-            eval_args: true,
-            eval_lax: true,
-            json: false,
-            constant_mode: :strict
-          )
-        end
+      Rubycli.stub(:call_target, lambda { |_method, pos_args, _kw_args|
+        captured = pos_args.first
+        nil
+      }) do
+        Rubycli::Runner.execute(
+          file,
+          nil,
+          ['run', '[:foo, :bar]'],
+          eval_args: true,
+          eval_lax: true,
+          json: false,
+          constant_mode: :strict
+        )
       end
 
       assert_equal %i[foo bar], captured
@@ -580,22 +572,19 @@ class RunnerTest < Minitest::Test
       RUBY
 
       captured = nil
-      run_without_exit = ->(target, *_args) { Rubycli.cli.run(target, ARGV.dup, false) }
-      Rubycli.stub(:run, run_without_exit) do
-        Rubycli.stub(:call_target, lambda { |method, pos_args, _kw_args|
-          captured = [method.receiver.seed, pos_args.first]
-          nil
-        }) do
-          Rubycli::Runner.execute(
-            file,
-            nil,
-            ['add', 'shared_seed + 2'],
-            new: true,
-            new_args: 'shared_seed = 40',
-            eval_args: true,
-            constant_mode: :strict
-          )
-        end
+      Rubycli.stub(:call_target, lambda { |method, pos_args, _kw_args|
+        captured = [method.receiver.seed, pos_args.first]
+        nil
+      }) do
+        Rubycli::Runner.execute(
+          file,
+          nil,
+          ['add', 'shared_seed + 2'],
+          new: true,
+          new_args: 'shared_seed = 40',
+          eval_args: true,
+          constant_mode: :strict
+        )
       end
 
       assert_equal [40, 42], captured
@@ -617,7 +606,7 @@ class RunnerTest < Minitest::Test
         end
       RUBY
 
-      Rubycli.stub(:run, ->(*) {}) do
+      Rubycli.cli.stub(:run, ->(*) {}) do
         Rubycli::Runner.execute(
           file,
           'EvalLoadModeRunner',

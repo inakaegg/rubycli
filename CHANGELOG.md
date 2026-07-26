@@ -15,6 +15,7 @@
 - `rubycli --help` no longer shows example invocations that referenced files outside this repository; the JSON/eval samples now use forms that actually parse.
 - The gem package ships `examples/*.rb`, so the walkthrough in both READMEs also works from an installed gem.
 - `changelog_uri` in the gemspec points at `CHANGELOG.md` instead of the (empty) GitHub Releases page, and the LICENSE copyright year matches the first release (2025).
+- `Rubycli::CommandLine.run` returns the command status instead of terminating the process from inside the runner, so it can be embedded in another program; `exe/rubycli` still exits with that status, and the documented `Rubycli.run(MyApp)` entry point still exits as before.
 - Diagnostics now go to stderr: the usage text printed after a wrong invocation, `Command '…' is not available.`, `Command '…' does not accept arguments.`, and the top-level usage shown when arguments are missing. `--help` still prints to stdout, so redirecting stdout captures only command results.
 
 ### Documentation
@@ -63,6 +64,8 @@
 
 ### Testing
 - Added tests for previously uncovered behaviour: the `return Type Description` comment shorthand, documentation issues reported without a file or line, keyword-splat usage rendering, placeholder type inference, and the json/eval mutual-exclusion guard.
+- Runner tests drive the real CLI instead of a "run without exiting" wrapper, and `Rubycli::CommandLine.run` is covered end to end for both a successful command and a missing one.
+- Added a regression test asserting that default mode passes shell/Ruby/YAML-looking arguments through untouched.
 - Added a documentation path check asserting that repository paths referenced by both READMEs, the changelog, and the CLI usage text exist.
 - Added dependency-free overall line, branch, and changed-line coverage gates plus GitHub Actions checks spanning the supported Ruby range.
 - Changed-line coverage now treats new library files that were never loaded by the test suite as uncovered, including non-ASCII paths quoted by Git.

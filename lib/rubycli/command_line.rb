@@ -209,7 +209,7 @@ module Rubycli
         )
       end
 
-      Rubycli::Runner.execute(
+      status = Rubycli::Runner.execute(
         target_path,
         class_or_module,
         args,
@@ -222,7 +222,9 @@ module Rubycli
         constant_mode: options.constant_mode
       )
 
-      0
+      # The runner reports the CLI status; treat anything else as success so the
+      # process always exits with a defined status.
+      status.is_a?(Integer) ? status : 0
     end
 
     # Usage requested with --help goes to stdout; usage shown because the

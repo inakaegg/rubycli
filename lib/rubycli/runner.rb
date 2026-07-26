@@ -231,7 +231,10 @@ module Rubycli
     end
 
     def run_with_modes(target, json:, eval_args:, eval_lax:)
-      runner = proc { Rubycli.run(target) }
+      # Rubycli.run terminates the process, which is what an embedded
+      # `Rubycli.run(MyApp)` script wants. Here the status has to travel back to
+      # Rubycli::CommandLine.run so callers can decide what to do with it.
+      runner = proc { Rubycli.cli.run(target, ARGV.dup, true) }
 
       if json
         Rubycli.with_json_mode(true, &runner)
