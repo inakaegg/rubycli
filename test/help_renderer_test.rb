@@ -47,6 +47,16 @@ module KeyrestHelpSamples
   end
 end
 
+module NumericDefaultHelpSamples
+  module_function
+
+  # --count COUNT [Integer] Retry count
+  # --flag [Boolean] Feature flag
+  def run(count: 1, flag: 0)
+    [count, flag]
+  end
+end
+
 class HelpRendererTest < Minitest::Test
   def setup
     environment = Rubycli::Environment.new(env: {}, argv: [])
@@ -84,6 +94,12 @@ class HelpRendererTest < Minitest::Test
     HELP
 
     assert_usage(expected, usage)
+  end
+
+  def test_numeric_default_keeps_the_value_placeholder_but_boolean_stays_a_flag
+    usage = @renderer.usage_for_method('run', NumericDefaultHelpSamples.method(:run))
+
+    assert_includes usage, 'Usage: rubycli run [--count=<COUNT>] [--flag]'
   end
 
   def test_usage_for_incomplete_docs_has_fallbacks

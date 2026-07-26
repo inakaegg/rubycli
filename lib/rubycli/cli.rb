@@ -116,9 +116,8 @@ module Rubycli
         args.unshift(command)
         execute_callable(target, args, command, cli_mode)
       else
-        error_msg = "Command '#{command}' is not available."
-        puts error_msg
-        @help_renderer.print_help(target, catalog)
+        warn "Command '#{command}' is not available."
+        @help_renderer.print_help(target, catalog, io: $stderr)
         1
       end
     end
@@ -151,8 +150,8 @@ module Rubycli
         return 0
       end
 
-      puts "Command '#{command}' does not accept arguments."
-      puts usage_for_method(command, method_obj)
+      warn "Command '#{command}' does not accept arguments."
+      warn usage_for_method(command, method_obj)
       1
     end
 
@@ -191,8 +190,8 @@ module Rubycli
     def handle_execution_error(error, command, method_obj, pos_args, kw_args, cli_mode)
       raise error unless cli_mode && !arguments_match?(method_obj, pos_args, kw_args) && usage_error?(error)
 
-      puts "Error: #{error.message}"
-      puts usage_for_method(command, method_obj)
+      warn "Error: #{error.message}"
+      warn usage_for_method(command, method_obj)
       1
     end
 

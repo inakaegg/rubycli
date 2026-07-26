@@ -196,6 +196,10 @@ ruby examples/hello_app_with_require.rb greet Taro --shout
 When you run a file through the bundled `rubycli` executable instead, return
 values are printed automatically.
 
+Return values go to stdout; warnings, errors, and the usage text shown after a
+failed invocation go to stderr, so `rubycli app.rb command > result.json` keeps
+the payload clean and the exit status non-zero on failure.
+
 ## Target constant resolution
 
 Rubycli assumes that the file name (CamelCased) matches the class or module you

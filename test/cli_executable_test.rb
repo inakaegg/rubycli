@@ -10,12 +10,12 @@ class CLIExecutableTest < Minitest::Test
   ROOT = File.expand_path('..', __dir__)
   EXECUTABLE = File.join(ROOT, 'exe', 'rubycli')
 
-  def test_without_arguments_prints_usage_and_fails
+  def test_without_arguments_prints_usage_to_stderr_and_fails
     out, err, status = run_cli
 
     assert_equal 1, status
-    assert_includes out, 'Usage: rubycli'
-    assert_empty err
+    assert_empty out
+    assert_includes err, 'Usage: rubycli'
   end
 
   def test_help_flag_prints_usage_and_succeeds
@@ -35,12 +35,30 @@ class CLIExecutableTest < Minitest::Test
   end
 
   def test_missing_positional_argument_reports_usage_instead_of_a_backtrace
-    out, _err, status = run_cli('examples/hello_app.rb', 'greet')
+    out, err, status = run_cli('examples/hello_app.rb', 'greet')
 
     assert_equal 1, status
-    assert_includes out, 'wrong number of arguments'
-    assert_includes out, 'Usage: hello_app.rb greet NAME'
-    refute_includes out, 'lib/rubycli'
+    assert_empty out
+    assert_includes err, 'wrong number of arguments'
+    assert_includes err, 'Usage: hello_app.rb greet NAME'
+    refute_includes err, 'lib/rubycli'
+  end
+
+  def test_unknown_command_keeps_stdout_clean_for_piping
+    out, err, status = run_cli('examples/hello_app.rb', 'missing-command')
+
+    assert_equal 1, status
+    assert_empty out
+    assert_includes err, "Command 'missing-command' is not available."
+    assert_includes err, 'Available commands:'
+  end
+
+  def test_negative_number_is_passed_through_as_a_positional_argument
+    out, err, status = run_cli('examples/hello_app.rb', 'greet', '-5')
+
+    assert_equal 0, status
+    assert_empty err
+    assert_equal "Hello, -5!\n", out
   end
 
   def test_prints_return_values_as_json

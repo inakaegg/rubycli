@@ -176,13 +176,19 @@ module Rubycli
     end
 
     def find_target_path(path)
-      if File.file?(path)
-        File.expand_path(path)
-      elsif File.file?("#{path}.rb")
-        File.expand_path("#{path}.rb")
-      else
-        raise Error, "File not found: #{path}"
-      end
+      resolved = if File.file?(path)
+                   path
+                 elsif File.file?("#{path}.rb")
+                   "#{path}.rb"
+                 else
+                   raise Error, "File not found: #{path}"
+                 end
+
+      # Reading the target happens in two places (source analysis and load), so
+      # check once here to report a curated error instead of an Errno backtrace.
+      raise Error, "File is not readable: #{resolved}" unless File.readable?(resolved)
+
+      File.expand_path(resolved)
     end
 
     def camelize(name)

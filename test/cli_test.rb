@@ -72,14 +72,15 @@ class CLITest < Minitest::Test
     end
 
     status = nil
-    out, _err = capture_io do
+    out, err = capture_io do
       status = @cli.run(target, %w[info unexpected], true)
     end
 
     assert_equal 1, status
     assert_equal 0, target.calls
-    assert_includes out, "Command 'info' does not accept arguments."
-    assert_includes out, 'Usage: rubycli info'
+    assert_empty out
+    assert_includes err, "Command 'info' does not accept arguments."
+    assert_includes err, 'Usage: rubycli info'
   end
 
   def test_help_input_skips_strict_validation
@@ -134,13 +135,14 @@ class CLITest < Minitest::Test
     end
 
     status = nil
-    out, _err = capture_io do
+    out, err = capture_io do
       status = @cli.run(target, ['missing'])
     end
 
     assert_equal 1, status
-    assert_includes out, "Command 'missing' is not available."
-    assert_includes out, 'available'
+    assert_empty out
+    assert_includes err, "Command 'missing' is not available."
+    assert_includes err, 'available'
   end
 
   def test_callable_target_receives_reconstructed_keyword_arguments
@@ -164,13 +166,14 @@ class CLITest < Minitest::Test
     end
 
     status = nil
-    out, _err = capture_io do
+    out, err = capture_io do
       status = @cli.run(target, ['greet'], true)
     end
 
     assert_equal 1, status
-    assert_includes out, 'wrong number of arguments'
-    assert_includes out, 'Usage: rubycli greet'
+    assert_empty out
+    assert_includes err, 'wrong number of arguments'
+    assert_includes err, 'Usage: rubycli greet'
   end
 
   def test_application_argument_error_is_not_reclassified_as_usage_error

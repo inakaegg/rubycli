@@ -10,9 +10,14 @@ module Rubycli
       @documentation_registry = documentation_registry
     end
 
-    def print_help(_target, catalog)
-      puts "Usage: #{File.basename($PROGRAM_NAME)} COMMAND [arguments]"
-      puts
+    # +io+ is $stderr when the help is shown because a command failed, so that
+    # piping stdout to another program never mixes diagnostics into the payload.
+    def print_help(target, catalog, io: $stdout)
+      io.puts(help_text(target, catalog))
+    end
+
+    def help_text(_target, catalog)
+      lines = ["Usage: #{File.basename($PROGRAM_NAME)} COMMAND [arguments]", '']
 
       instance_entries = catalog.entries_for(:instance)
       class_entries = catalog.entries_for(:class)
@@ -20,29 +25,27 @@ module Rubycli
       groups << { label: 'Instance methods', entries: instance_entries } unless instance_entries.empty?
       groups << { label: 'Class methods', entries: class_entries } unless class_entries.empty?
 
-      if groups.empty?
-        puts 'No commands available.'
-        return
-      end
+      return (lines << 'No commands available.').join("\n") if groups.empty?
 
-      puts 'Available commands:'
+      lines << 'Available commands:'
       groups.each do |group|
-        puts "  #{group[:label]}:"
+        lines << "  #{group[:label]}:"
         group[:entries].each do |entry|
           description = method_description(entry.method)
           line = "    #{entry.command.ljust(20)}"
           line += " #{description}" unless description.empty?
-          puts line.rstrip
+          lines << line.rstrip
 
-          puts "      Aliases: #{entry.aliases.join(', ')}" unless entry.aliases.empty?
+          lines << "      Aliases: #{entry.aliases.join(', ')}" unless entry.aliases.empty?
         end
-        puts unless group.equal?(groups.last)
+        lines << '' unless group.equal?(groups.last)
       end
 
-      puts 'Methods with the same name can be invoked via instance::NAME / class::NAME.' if catalog.duplicates.any?
+      lines << 'Methods with the same name can be invoked via instance::NAME / class::NAME.' if catalog.duplicates.any?
 
-      puts
-      puts "Detailed command help: #{File.basename($PROGRAM_NAME)} COMMAND help"
+      lines << ''
+      lines << "Detailed command help: #{File.basename($PROGRAM_NAME)} COMMAND help"
+      lines.join("\n")
     end
 
     def method_description(method_obj)

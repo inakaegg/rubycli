@@ -163,6 +163,40 @@ module ScalarTypeSamples
   end
 end
 
+module NumericDefaultSamples
+  module_function
+
+  # --count [Integer] Retry count
+  # --limit LIMIT [Integer] Upper bound
+  # --flag [Boolean] Feature flag
+  def run(count: 1, limit: 0, flag: 0)
+    [count, limit, flag]
+  end
+end
+
+module NegativeNumberSamples
+  module_function
+
+  # AMOUNT [Integer] Signed amount
+  def record(amount)
+    amount
+  end
+
+  # VALUES... [Integer] Signed values
+  def collect(*values)
+    values
+  end
+end
+
+module OptionalLibrarySamples
+  module_function
+
+  # --budget AMOUNT [BigDecimal] Budget amount
+  def spend(budget:)
+    budget
+  end
+end
+
 class ArgumentParserTest < Minitest::Test
   def setup
     @environment = Rubycli::Environment.new(env: {}, argv: [])
@@ -220,6 +254,60 @@ class ArgumentParserTest < Minitest::Test
 
     assert_equal ['--literal', 'name=value'], pos_args
     assert_empty kw_args
+  end
+
+  def test_negative_number_is_parsed_as_a_positional_argument
+    method = NegativeNumberSamples.method(:record)
+
+    pos_args, kw_args = @parser.parse(['-5'], method)
+
+    assert_equal [-5], pos_args
+    assert_empty kw_args
+  end
+
+  def test_negative_numbers_do_not_consume_following_rest_arguments
+    method = NegativeNumberSamples.method(:collect)
+
+    pos_args, kw_args = @parser.parse(%w[-5 -1_000 -0x10], method)
+
+    assert_equal [-5, -1000, -16], pos_args
+    assert_empty kw_args
+  end
+
+  def test_option_with_numeric_default_accepts_a_space_separated_value
+    method = NumericDefaultSamples.method(:run)
+
+    pos_args, kw_args = @parser.parse(%w[--count 3 --limit 7], method)
+
+    assert_empty pos_args
+    assert_equal({ count: 3, limit: 7 }, kw_args)
+  end
+
+  def test_documented_boolean_option_with_numeric_default_stays_a_flag
+    method = NumericDefaultSamples.method(:run)
+
+    pos_args, kw_args = @parser.parse(['--flag'], method)
+
+    assert_empty pos_args
+    assert_equal({ flag: true }, kw_args)
+  end
+
+  def test_missing_optional_library_reports_a_user_facing_error
+    method = OptionalLibrarySamples.method(:spend)
+    stub_require = lambda do |name|
+      raise LoadError, "cannot load such file -- #{name}" if name == 'bigdecimal'
+
+      true
+    end
+
+    error = assert_raises(Rubycli::ArgumentError) do
+      @parser.stub(:require, stub_require) do
+        @parser.parse(%w[--budget 1.5], method)
+      end
+    end
+
+    assert_includes error.message, "'BigDecimal'"
+    assert_includes error.message, 'gem install bigdecimal'
   end
 
   def test_undocumented_required_keyword_rejects_following_option_as_its_value

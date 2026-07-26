@@ -56,6 +56,22 @@ class RunnerTest < Minitest::Test
     end
   end
 
+  def test_find_target_path_reports_unreadable_files_without_a_backtrace
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, 'unreadable_runner.rb')
+      File.write(path, "# runner\n")
+      File.chmod(0o000, path)
+      skip 'file permissions are not enforced for this user' if File.readable?(path)
+
+      error = assert_raises(Rubycli::Runner::Error) do
+        Rubycli::Runner.find_target_path(path)
+      end
+      assert_includes error.message, 'File is not readable'
+    ensure
+      File.chmod(0o600, path) if path && File.exist?(path)
+    end
+  end
+
   def test_execute_infers_constant_and_instantiates_when_new_flag
     Dir.mktmpdir do |dir|
       file = File.join(dir, 'sample_runner.rb')

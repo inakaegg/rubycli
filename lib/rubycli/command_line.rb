@@ -225,8 +225,10 @@ module Rubycli
       0
     end
 
+    # Usage requested with --help goes to stdout; usage shown because the
+    # invocation was wrong is a diagnostic and belongs on stderr.
     def print_usage(status)
-      $stdout.puts(USAGE)
+      (status.zero? ? $stdout : $stderr).puts(USAGE)
       status
     end
 

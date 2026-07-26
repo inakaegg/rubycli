@@ -192,6 +192,10 @@ ruby examples/hello_app_with_require.rb greet Taro --shout
 
 付属の `rubycli` コマンド経由で実行した場合は、メソッドの戻り値が自動で標準出力に表示されます。
 
+戻り値は標準出力、警告・エラー・失敗時に表示される usage は標準エラー出力へ送られます。
+そのため `rubycli app.rb command > result.json` としても診断メッセージが結果へ混ざらず、
+失敗時は終了コードが 0 以外になります。
+
 ## 対象定数の解決
 
 Rubycli は「ファイル名を CamelCase にした定数」を公開対象と想定します。

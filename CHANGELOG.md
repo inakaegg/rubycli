@@ -15,6 +15,7 @@
 - `rubycli --help` no longer shows example invocations that referenced files outside this repository; the JSON/eval samples now use forms that actually parse.
 - The gem package ships `examples/*.rb`, so the walkthrough in both READMEs also works from an installed gem.
 - `changelog_uri` in the gemspec points at `CHANGELOG.md` instead of the (empty) GitHub Releases page, and the LICENSE copyright year matches the first release (2025).
+- Diagnostics now go to stderr: the usage text printed after a wrong invocation, `Command '…' is not available.`, `Command '…' does not accept arguments.`, and the top-level usage shown when arguments are missing. `--help` still prints to stdout, so redirecting stdout captures only command results.
 
 ### Documentation
 - Corrected the `--auto-target` guidance: `examples/hello_app_with_docs.rb` defines a matching constant alias, so it runs without `-a`; the constant-selection walkthrough now uses `examples/multi_constant_runner.rb` and `examples/mismatched_constant_runner.rb`.
@@ -51,6 +52,10 @@
 - Required options accept a lone `-` value, bare rest placeholders render with an ellipsis, and quoted positional/option `String[]` elements remain strings.
 - Invalid Ruby syntax passed through strict eval mode now produces a user-facing Rubycli argument error instead of leaking a `SyntaxError` backtrace.
 - Circular arrays/hashes returned by commands now fall back to inspected output instead of raising a JSON nesting error.
+- Keyword options whose default is `0` or `1` accept a space-separated value again (`--count 3`); those defaults are boolean-ish strings, so they used to turn the option into a flag, drop its documented placeholder from the help output, and fail with `Value 'true' … is invalid`. Explicitly documented `[Boolean]` options keep working with such defaults.
+- Negative numbers are treated as values instead of options, so `greet -5` and rest parameters such as `collect -5 -1_000 -0x10` no longer swallow the following argument or turn it into a keyword.
+- Type annotations naming a class from an uninstalled library (`BigDecimal` without the bigdecimal gem, which stopped being a default gem in Ruby 3.4) report an installation hint instead of leaking a `LoadError` backtrace.
+- Target files that exist but cannot be read report `File is not readable:` instead of an `Errno::EACCES` backtrace.
 
 ### Testing
 - Added tests for previously uncovered behaviour: the `return Type Description` comment shorthand, documentation issues reported without a file or line, keyword-splat usage rendering, placeholder type inference, and the json/eval mutual-exclusion guard.

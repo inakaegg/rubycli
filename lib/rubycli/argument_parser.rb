@@ -11,6 +11,8 @@ module Rubycli
   class ArgumentParser
     include TypeUtils
 
+    OPTION_TOKEN_PATTERN = /\A-{1,2}([a-zA-Z0-9_-]+)(?:=(.*))?\z/
+
     def initialize(environment:, documentation_registry:, json_coercer:, debug_logger:)
       @environment = environment
       @documentation_registry = documentation_registry
@@ -108,8 +110,10 @@ module Rubycli
             .map { |_, name| name.to_s }
     end
 
+    # Tokens such as -5, -1_000 and -0x10 match the option pattern, but no Ruby
+    # keyword can be named after a number, so they are values, not options.
     def option_token?(token)
-      token =~ /\A-{1,2}([a-zA-Z0-9_-]+)(?:=(.*))?\z/
+      token.match?(OPTION_TOKEN_PATTERN) && looks_like_option?(token)
     end
 
     def assignment_token_for_method?(token, method, kw_param_names)
@@ -132,7 +136,7 @@ module Rubycli
       required_kw_param_names,
       known_option_names
     )
-      token =~ /\A-{1,2}([a-zA-Z0-9_-]+)(?:=(.*))?\z/
+      token =~ OPTION_TOKEN_PATTERN
       cli_key = Regexp.last_match(1).tr('-', '_')
       embedded_value = Regexp.last_match(2)
 
@@ -221,7 +225,7 @@ module Rubycli
     end
 
     def known_option_token?(token, known_option_names)
-      match = token&.match(/\A-{1,2}([a-zA-Z0-9_-]+)(?:=.*)?\z/)
+      match = token&.match(OPTION_TOKEN_PATTERN)
       return false unless match
 
       key = match[1].tr('-', '_')
@@ -622,6 +626,17 @@ module Rubycli
       safe_constant_lookup(normalized)
     end
 
+    # Type annotations may name a class from a library that is not installed
+    # (bigdecimal, for instance, is no longer a default gem). Report it as a
+    # user-facing error instead of letting the LoadError escape with a backtrace.
+    def require_optional_library(library, type_token)
+      require library
+    rescue LoadError
+      raise ArgumentError,
+            "Type '#{type_token}' needs the #{library} library, which is not installed. " \
+            "Install it with `gem install #{library}` (or add it to your Gemfile)."
+    end
+
     def format_literal_value(value)
       case value
       when Symbol
@@ -720,7 +735,7 @@ module Rubycli
           converted_value.is_a?(Symbol) ? converted_value : value.to_sym
         }
       when 'BigDecimal', 'Decimal'
-        require 'bigdecimal'
+        require_optional_library('bigdecimal', normalized)
         lambda { |value|
           return value if value.is_a?(BigDecimal)
 
@@ -731,13 +746,13 @@ module Rubycli
           end
         }
       when 'Date'
-        require 'date'
+        require_optional_library('date', normalized)
         ->(value) { Date.parse(value) }
       when 'Time'
-        require 'time'
+        require_optional_library('time', normalized)
         ->(value) { Time.parse(value) }
       when 'DateTime'
-        require 'date'
+        require_optional_library('date', normalized)
         ->(value) { DateTime.parse(value) }
       when 'JSON'
         lambda { |value|
@@ -758,7 +773,7 @@ module Rubycli
           parsed_value
         }
       when 'Pathname'
-        require 'pathname'
+        require_optional_library('pathname', normalized)
         lambda { |value|
           return value if value.is_a?(Pathname)
 

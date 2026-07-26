@@ -639,20 +639,29 @@ module Rubycli
           next unless defaults.key?(opt.keyword)
 
           opt.default_value = defaults[opt.keyword]
-          if TypeUtils.boolean_string?(opt.default_value)
+          if boolean_default?(opt.default_value)
             opt.boolean_flag = true
             opt.requires_value = false
             if opt.doc_format == :auto_generated
               opt.value_name = nil
               opt.types = ['Boolean']
             end
-          elsif opt.boolean_flag
+          elsif opt.boolean_flag && !TypeUtils.boolean_string?(opt.default_value)
             opt.boolean_flag = false
             opt.requires_value = true
             opt.value_name ||= default_placeholder_for(opt.keyword)
             opt.types = ['String'] if opt.types.nil? || opt.types.empty?
           end
         end
+      end
+
+      # Only a literal true/false default turns an option into a boolean flag.
+      # Values such as 0/1 are truthy for TypeUtils.boolean_string?, but they are
+      # ordinary defaults for numeric options, so they must keep accepting a value.
+      def boolean_default?(default_value)
+        return true if [true, false].include?(default_value)
+
+        %w[true false].include?(default_value.to_s.strip.downcase)
       end
 
       def take_positional_definition(positional_defs, parameter_name)

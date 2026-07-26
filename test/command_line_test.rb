@@ -19,9 +19,9 @@ class CommandLineTest < Minitest::Test
     end
 
     assert_equal 1, status
-    assert_includes out, 'Usage: rubycli'
-    assert_includes out, 'Arguments are parsed as safe literals by default'
-    assert_equal '', err
+    assert_empty out
+    assert_includes err, 'Usage: rubycli'
+    assert_includes err, 'Arguments are parsed as safe literals by default'
   end
 
   def test_parses_flags_and_invokes_runner_with_options
@@ -355,8 +355,8 @@ class CommandLineTest < Minitest::Test
     end
 
     assert_equal 1, status
-    assert_includes out, 'Usage: rubycli'
-    assert_equal '', err
+    assert_empty out
+    assert_includes err, 'Usage: rubycli'
   end
 
   def test_check_rejects_argument_modes_and_forwarded_commands
