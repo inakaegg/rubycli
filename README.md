@@ -15,7 +15,7 @@ Rubycli is inspired by [Python Fire](https://github.com/google/python-fire) but
 is not a port or an official project; the focus is Ruby's documentation
 conventions and type annotations.
 
-> 🇯🇵 Japanese documentation: [README.ja.md](README.ja.md)
+> 🇯🇵 日本語ドキュメント: [README.ja.md](README.ja.md)
 
 ![Rubycli demo showing generated commands and invocation](https://raw.githubusercontent.com/inakaegg/rubycli/main/assets/rubycli-demo.gif)
 
