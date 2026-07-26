@@ -56,6 +56,27 @@ class RunnerTest < Minitest::Test
     end
   end
 
+  def test_instance_only_constant_error_does_not_claim_the_constant_is_missing
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, 'instance_only_runner.rb')
+      File.write(path, <<~RUBY)
+        class InstanceOnlyRunner
+          def run
+            :ok
+          end
+        end
+      RUBY
+
+      error = assert_raises(Rubycli::Runner::Error) do
+        Rubycli::Runner.execute(path, nil, ['run'])
+      end
+
+      assert_includes error.message, 'InstanceOnlyRunner cannot be used as a CLI target'
+      assert_includes error.message, 'Run with --new'
+      refute_includes error.message, 'Could not find definition'
+    end
+  end
+
   def test_find_target_path_reports_unreadable_files_without_a_backtrace
     Dir.mktmpdir do |dir|
       path = File.join(dir, 'unreadable_runner.rb')

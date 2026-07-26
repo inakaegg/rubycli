@@ -214,11 +214,13 @@ Rubycli は「ファイル名を CamelCase にした定数」を公開対象と�
 ```bash
 # ファイル名と一致しない定数を明示（既定の strict モードでも動く）
 rubycli examples/multi_constant_runner.rb HelperRunner inspect
-#=> Helper invoked
+#=> Helper invoked   # メソッド自身が出力した行
+#=> :helper          # 戻り値を rubycli が出力した行
 
 # auto モードなら候補が 1 つだけのファイルを自動選択
 rubycli -a examples/mismatched_constant_runner.rb greet Hanako --message Hi
-#=> Hi, Hanako!
+#=> Hi, Hanako!      # メソッド自身が出力した行
+#=> Hi, Hanako!      # 同じ文字列が戻り値として出力される（--quiet を付けると 1 行になる）
 ```
 
 `Outer::Inner::Runner` のようなネストした定数も、完全修飾名を渡せば検出できます。

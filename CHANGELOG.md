@@ -23,6 +23,8 @@
 - Documented the previously missing `-n`, `-c`, `--help`, and `--print-result` / `RUBYCLI_PRINT_RESULT` entries in the flag tables.
 - Clarified that `--new=VALUE` supplies exactly one value, bound to the constructor's first parameter, and corrected the 0.1.7 entry that claimed arrays and hashes expand into positional and keyword arguments.
 - Documented that arguments annotated as plain `[String]` skip literal parsing and keep surrounding quote characters, and that `--eval-args` requires every argument to be valid Ruby.
+- The constant-resolution walkthrough shows both output lines the bundled examples produce (the method's own `puts` plus the return value printed by Rubycli) instead of only the first one.
+- Documented that results go to stdout while warnings, errors, and post-failure usage go to stderr.
 - Replaced non-existent `scripts/*.rb` paths in both READMEs with bundled examples, and re-recorded the demo GIF, which still advertised the `--debug` flag removed in 0.1.5 along with pre-0.1.2 help formatting.
 - Fixed the JSON, eval, and pre-script command examples in `examples/new_mode_runner.rb`, which could not run as written, and documented `--mode` there and `--quiet` in `examples/mismatched_constant_runner.rb` so both pass `rubycli --check`.
 
@@ -56,6 +58,8 @@
 - Negative numbers are treated as values instead of options, so `greet -5` and rest parameters such as `collect -5 -1_000 -0x10` no longer swallow the following argument or turn it into a keyword.
 - Type annotations naming a class from an uninstalled library (`BigDecimal` without the bigdecimal gem, which stopped being a default gem in Ruby 3.4) report an installation hint instead of leaking a `LoadError` backtrace.
 - Target files that exist but cannot be read report `File is not readable:` instead of an `Errno::EACCES` backtrace.
+- Commands returning an Enumerable whose elements are not pairs (`Set`, `Range`, `Enumerator`) print their inspected form instead of raising `TypeError` from the duck-typed `to_h` conversion.
+- A constant that exists but exposes no callable command no longer reports `Could not find definition:` while listing that same constant as found; the message now says it cannot be used as a CLI target and keeps the `--new` hint.
 
 ### Testing
 - Added tests for previously uncovered behaviour: the `return Type Description` comment shorthand, documentation issues reported without a file or line, keyword-splat usage rendering, placeholder type inference, and the json/eval mutual-exclusion guard.

@@ -96,6 +96,18 @@ class ResultEmitterTest < Minitest::Test
     assert_includes output, '"beta"'
   end
 
+  def test_enumerables_without_pair_elements_fall_back_to_inspect
+    environment = Rubycli::Environment.new(env: { 'RUBYCLI_PRINT_RESULT' => 'true' })
+    emitter = Rubycli::ResultEmitter.new(environment: environment)
+    results = [Set[1, 2], (1..3), [1, 2].each]
+
+    output, _err = capture_io do
+      results.each { |result| emitter.emit(result) }
+    end
+
+    assert_equal results.map { |result| "#{result.inspect}\n" }.join, output
+  end
+
   def test_falls_back_to_inspect_for_plain_objects
     environment = Rubycli::Environment.new(env: { 'RUBYCLI_PRINT_RESULT' => 'true' })
     emitter = Rubycli::ResultEmitter.new(environment: environment)

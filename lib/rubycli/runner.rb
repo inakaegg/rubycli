@@ -427,7 +427,8 @@ module Rubycli
           base_const,
           candidates.map(&:name),
           path,
-          details: detail
+          details: detail,
+          headline: "#{matching.name} cannot be used as a CLI target"
         )
       end
 
@@ -478,8 +479,10 @@ module Rubycli
       File.expand_path(path.to_s)
     end
 
-    def build_missing_constant_message(name, defined_constants, full_path, details: nil)
-      lines = ["Could not find definition: #{name}"]
+    # +headline+ replaces the default first line when the constant was found but
+    # cannot be exposed, so the message does not claim it is missing.
+    def build_missing_constant_message(name, defined_constants, full_path, details: nil, headline: nil)
+      lines = [headline || "Could not find definition: #{name}"]
       lines << ''
       lines << "Loaded file: #{File.expand_path(full_path)}" if full_path
 

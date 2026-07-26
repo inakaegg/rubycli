@@ -220,11 +220,13 @@ demonstrate both situations: `examples/multi_constant_runner.rb` defines
 ```bash
 # pick a non-matching constant explicitly (works in the default strict mode)
 rubycli examples/multi_constant_runner.rb HelperRunner inspect
-#=> Helper invoked
+#=> Helper invoked   # printed by the method itself
+#=> :helper          # the return value, printed by rubycli
 
 # or let auto mode select the single callable constant
 rubycli -a examples/mismatched_constant_runner.rb greet Hanako --message Hi
-#=> Hi, Hanako!
+#=> Hi, Hanako!      # printed by the method itself
+#=> Hi, Hanako!      # the same string returned to rubycli (add --quiet to print it once)
 ```
 
 Nested constants such as `Outer::Inner::Runner` are found as well; pass the

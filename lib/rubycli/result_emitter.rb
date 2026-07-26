@@ -28,15 +28,23 @@ module Rubycli
       when Array, Hash
         JSON.pretty_generate(result)
       else
-        if result.respond_to?(:to_h)
-          JSON.pretty_generate(result.to_h)
-        elsif result.respond_to?(:to_ary)
-          JSON.pretty_generate(result.to_ary)
-        else
-          result.inspect
-        end
+        format_convertible_result(result)
       end
     rescue JSON::GeneratorError, JSON::NestingError
+      result.inspect
+    end
+
+    # to_h / to_ary are duck-typed: every Enumerable answers to_h, but Set,
+    # Range and Enumerator raise TypeError unless their elements are pairs.
+    def format_convertible_result(result)
+      if result.respond_to?(:to_h)
+        JSON.pretty_generate(result.to_h)
+      elsif result.respond_to?(:to_ary)
+        JSON.pretty_generate(result.to_ary)
+      else
+        result.inspect
+      end
+    rescue TypeError
       result.inspect
     end
   end

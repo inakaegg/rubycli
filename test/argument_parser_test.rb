@@ -256,6 +256,25 @@ class ArgumentParserTest < Minitest::Test
     assert_empty kw_args
   end
 
+  def test_default_mode_never_evaluates_ruby_or_yaml_objects_in_arguments
+    callable = ->(*values) { values }
+    dangerous = [
+      '`touch /tmp/rubycli_should_not_exist`',
+      # The literal text is precisely what must not be evaluated.
+      # rubocop:disable Lint/InterpolationCheck
+      '#{`touch /tmp/rubycli_should_not_exist`}',
+      # rubocop:enable Lint/InterpolationCheck
+      'system("touch /tmp/rubycli_should_not_exist")',
+      '!ruby/object:Gem::Requirement {}'
+    ]
+
+    pos_args, kw_args = @parser.parse(dangerous, callable)
+
+    assert_equal dangerous, pos_args
+    assert_empty kw_args
+    refute_path_exists '/tmp/rubycli_should_not_exist'
+  end
+
   def test_negative_number_is_parsed_as_a_positional_argument
     method = NegativeNumberSamples.method(:record)
 
